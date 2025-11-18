@@ -1,0 +1,28 @@
+ID	Description	Available Time	Max Revision
+D1	Released new feature system that users can utilize.	-	-
+D4	Figma comments on UI specification for usability improvements.	-	2
+D5	Input that causes safety, liveness, and reachability violations.	-	1
+D7	Code review comments by SRE on GitHub.	-	2
+D8	Acceptance test bug tickets by operators.	-	2
+D9	Service improvement requests from users received by CS.	0	-
+D10	Management strategy. Specifies what type of users to target going forward.	5	-
+D11	External service X.	15	-
+D12	Functional requirements. Expressed in the form of liveness and reachability.	-	-
+D13	Non-functional requirements. Expressed in the form of safety and performance requirements.	-	-
+D14	User personas.	0	-
+D15	Screen transition specification. Screen transition diagram with screens as states and event-guard-postcondition triplets attached to transitions.	-	-
+D16	Infrastructure configuration diagram.	-	-
+D17	API specification expressed as sets of signature, precondition, and postcondition.	-	-
+D18	Table definition document for tables expressed in DDL.	-	-
+D19	Server implementation.	-	-
+D20	Web server implementation for management screens operated by operators.	-	-
+D21	Test cases related to user-facing features.	-	-
+D22	Client implementation.	-	-
+D23	Screen display specification. Describes representative layouts of screen UI for each screen and interactions between screen UIs.	-	-
+D24	Management operation manual. Contains management operation procedures for each anticipated situation requiring management operations.	-	-
+D25	Developed new feature system.	-	-
+D26	New feature system integrated with external service X.	-	-
+D27	New feature system integrated with external service X with IP restrictions limited to internal use. Users cannot use the service yet.	-	-
+D3.1	Bug tickets from production verification on JIRA.	-	1
+D3.2	Bug tickets from system integration testing on JIRA.	-	2
+D3.3	Bug tickets from system testing on JIRA.	-	3

@@ -1,0 +1,128 @@
+{
+  "initial_state": {
+    "time": 0,
+    "remained_volume": {
+      "P1": 2
+    },
+    "revision": {
+      "D1": 0,
+      "D2": 0
+    },
+    "num_of_complete": {
+      "P1": 0
+    },
+    "allocation_should_continue": {},
+    "updated_deliverables_not_handled": {
+      "P1": []
+    }
+  },
+  "transitions": [
+    {
+      "allocation": {},
+      "next_state": {
+        "time": 1,
+        "remained_volume": {
+          "P1": 2
+        },
+        "revision": {
+          "D1": 1,
+          "D2": 0
+        },
+        "num_of_complete": {
+          "P1": 0
+        },
+        "allocation_should_continue": {},
+        "updated_deliverables_not_handled": {
+          "P1": [
+            "D1"
+          ]
+        }
+      }
+    },
+    {
+      "allocation": {
+        "P1": {
+          "resources": [
+            "R1"
+          ],
+          "consumed_volume": 1
+        }
+      },
+      "next_state": {
+        "time": 3,
+        "remained_volume": {
+          "P1": 1
+        },
+        "revision": {
+          "D1": 1,
+          "D2": 1
+        },
+        "num_of_complete": {
+          "P1": 1
+        },
+        "allocation_should_continue": {},
+        "updated_deliverables_not_handled": {
+          "P1": [
+            "D2"
+          ]
+        }
+      }
+    },
+    {
+      "allocation": {
+        "P1": {
+          "resources": [
+            "R1"
+          ],
+          "consumed_volume": 1
+        }
+      },
+      "next_state": {
+        "time": 4,
+        "remained_volume": {
+          "P1": 0.5
+        },
+        "revision": {
+          "D1": 1,
+          "D2": 2
+        },
+        "num_of_complete": {
+          "P1": 2
+        },
+        "allocation_should_continue": {},
+        "updated_deliverables_not_handled": {
+          "P1": [
+            "D2"
+          ]
+        }
+      }
+    },
+    {
+      "allocation": {
+        "P1": {
+          "resources": [
+            "R1"
+          ],
+          "consumed_volume": 1
+        }
+      },
+      "next_state": {
+        "time": 4.5,
+        "remained_volume": {
+          "P1": 0.25
+        },
+        "revision": {
+          "D1": 1,
+          "D2": 3
+        },
+        "num_of_complete": {
+          "P1": 3
+        },
+        "allocation_should_continue": {},
+        "updated_deliverables_not_handled": {
+          "P1": []
+        }
+      }
+    }
+  ]
+}

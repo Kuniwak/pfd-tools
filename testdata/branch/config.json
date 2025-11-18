@@ -1,0 +1,7 @@
+{
+        "pfd": "pfd.drawio",
+        "atomic_process_table": "atomic_proc.tsv",
+        "atomic_deliverable_table": "deliv.tsv",
+        "composite_deliverable_table": "comp_deliv.tsv",
+        "resource_table": "resource.tsv"
+}

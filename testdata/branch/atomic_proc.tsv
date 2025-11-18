@@ -1,0 +1,4 @@
+ID	Description	Est. Work Volume	Est. Rework Volume Ratio	Needed Resources	Start Condition
+P1	Process 1	1	0	R1:1	
+P2	Process 1	1	0	R2:1	
+P3	Process 1	1	0	R3:1	

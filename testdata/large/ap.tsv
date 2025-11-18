@@ -1,0 +1,23 @@
+ID	Description	Est. Work Volume	Est. Rework Volume Ratio	Needed Resources	Start Condition	Group	Milestone
+P1	Analyze requirements	10	0.1	Biz:1		User,Admin	M1
+P2	Document screen transition specification	10	0.1	Front,Designer:2;Designer:1		User,Admin	M2
+P3	Design infrastructure	5	0.1	SRE:1		User,Admin	M3a
+P4	Design API	8	0.1	App:1		User,Admin	M3a
+P5	Design tables	10	0.1	App:1		User,Admin	M3a
+P6	Implement server	20	0.1	App:1		User	M3b
+P7	Implement management screen	5	0.1	App:1		Admin	M3b
+P8	Validate specification	10	0.1	SET:1	\complete(*)	User,Admin	M2
+P9	Design correctness verification	10	0.1	TE:1		User	M3c
+P10	Implement client	15	0.1	Front:1		User	M3b
+P11	Document screen display specification	10	0.1	Front,Designer:2;Designer:1		User	M2
+P12	Review usability	7	0.1	Designer:1		User	M2
+P13	Code review by SRE	3	0.1	SRE:1	\complete(*)	User	M3b
+P14	Design management operations	5	0.1	Ope:1		Admin	M3a
+P15	Acceptance testing by operators	5	0.1	Ope:1	\complete(*)	Admin	M4
+P16	Integrate server and client	0.2	0.1	App,Front:1		User	M3b
+P17	System testing in development environment	10	0.1	TE:1	\complete(*)	User	M4
+P18	Integrate with external service in staging environment	0.2	0.1	App:1		User	M3b
+P19	System integration testing	5	0.1	TE:1	\complete(*)	User	M5
+P20	Release with IP restrictions	0	0.1	SRE:1	\complete(*)	User,Admin	M6
+P21	Production verification	1	0.1	TE:1	\complete(*)	User,Admin	M6
+P22	Remove IP restrictions	0	0.1	SRE:1	\complete(*)	User,Admin	M7

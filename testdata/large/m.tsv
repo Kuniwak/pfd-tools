@@ -1,0 +1,10 @@
+ID	Description	Groups	Successors
+M1	Requirements analysis	User,Admin	M2
+M2	Specification documentation	User,Admin	M3a,M3b,M3c
+M3a	Design	User,Admin	M4
+M3b	Implementation	User,Admin	M4
+M3c	Test design	User,Admin	M4
+M4	System testing	User,Admin	M5
+M5	System integration testing	User,Admin	M6
+M6	Production verification	User,Admin	M7
+M7	Release	User,Admin	

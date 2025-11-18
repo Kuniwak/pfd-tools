@@ -1,0 +1,222 @@
+version: 2
+
+builds:
+  - id: pfdlint
+    binary: pfdlint
+    main: ./tools/pfdlint/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdrenum
+    binary: pfdrenum
+    main: ./tools/pfdrenum/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdtable
+    binary: pfdtable
+    main: ./tools/pfdtable/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdplan
+    binary: pfdplan
+    main: ./tools/pfdplan/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: holidays
+    binary: holidays
+    main: ./tools/holidays/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: plantimeline
+    binary: plantimeline
+    main: ./tools/plantimeline/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: planmaster
+    binary: planmaster
+    main: ./tools/planmaster/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdquery
+    binary: pfdquery
+    main: ./tools/pfdquery/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: criticalpath
+    binary: criticalpath
+    main: ./tools/criticalpath/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdrun
+    binary: pfdrun
+    main: ./tools/debug/pfdrun/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdparse
+    binary: pfdparse
+    main: ./tools/debug/pfdparse/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfdrungraph
+    binary: pfdrungraph
+    main: ./tools/debug/pfdrungraph/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfddot
+    binary: pfddot
+    main: ./tools/debug/pfddot/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfddeadlock
+    binary: pfddeadlock
+    main: ./tools/debug/pfddeadlock/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pfddiff
+    binary: pfddiff
+    main: ./tools/pfddiff/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: bizday
+    binary: bizday
+    main: ./tools/bizday/main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: ["tar.gz"]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  prerelease: auto

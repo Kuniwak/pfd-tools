@@ -1,0 +1,11 @@
+{
+  "name": "pfd-tools",
+  "private": true,
+  "scripts": {
+    "md-test": "npx textlint **/*.md"
+  },
+  "devDependencies": {
+    "textlint": "^15.2.2",
+    "textlint-rule-no-dead-link": "^6.0.1"
+  }
+}
