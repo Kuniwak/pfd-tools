@@ -1,0 +1,3 @@
+ID	Description	Est. Work Volume	Est. Rework Volume Ratio	Needed Resources	Start Condition	Milestone	Group
+P1	Process	2	0.5	R1:1		M1	G1
+P2	Process	2	0.5	R1:1	\complete(*)	M2	G1

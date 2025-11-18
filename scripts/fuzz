@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+fuzz-files() {
+	git grep --name-only 'func Fuzz[^( ]* *(t \*testing\.F)'
+}
+
+fuzz-func() {
+	local file="$1"
+	sed '/func Fuzz[^( ]* *(t \*testing.F)/!d; s/^\ *func \(Fuzz[^( ]*\).*$/\1/' "$file"
+}
+
+run-fuzz() {
+	local file="$1"
+	local func="$2"
+	local fuzztime="$3"
+	local dir
+	dir="$(dirname "$file")"
+
+	(cd "$dir"
+		echo "(cd $BASE_DIR && cd $dir && go test -fuzztime=$fuzztime -fuzz=$func)"
+		go test -fuzztime="$fuzztime" -fuzz="$func" 
+		echo
+	)
+}
+
+main() {
+	local fuzztime="${1:-60s}"
+
+	(cd "$BASE_DIR"
+		local failed=false
+		while read -r file; do
+			local target
+			func="$(fuzz-func "$file")"
+
+			if ! run-fuzz "$file" "$func" "$fuzztime"; then
+				failed=true
+			fi
+		done < <(fuzz-files)
+
+		if $failed; then
+			false
+		fi
+	)
+}
+
+main "$@"
