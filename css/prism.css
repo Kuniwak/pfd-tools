@@ -1,0 +1,108 @@
+/* Colors from https://github.com/cocopon/iceberg.vim
+
+Copyright (c) 2014 cocopon <cocopon@me.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+*{
+    --iceberg-background:#161821;
+    --iceberg-foreground:#c6c8d1;
+    --iceberg-linenr-bg:#1e2132;
+    --iceberg-linenr-fg:#444b71;
+    --iceberg-error:#e27878;
+    --iceberg-special:#b4be82;
+    --iceberg-identifier:#89b8c2;
+    --iceberg-statement:#84a0c6;
+    --iceberg-constant:#a093c7;
+    --iceberg-comment:#6b7089;
+    --iceberg-cursorline:#1e2132;
+}
+@media (prefers-color-scheme: light) {
+    *{
+        --iceberg-background:#e8e9ec;
+        --iceberg-foreground:#33374c;
+        --iceberg-linenr-bg:#9fa7bd;
+        --iceberg-linenr-fg:#dcdfe7;
+        --iceberg-error:#cc517a;
+        --iceberg-special:#668e3d;
+        --iceberg-identifier:#3f83a6;
+        --iceberg-statement:#2d539e;
+        --iceberg-constant:#7759b4;
+        --iceberg-comment:#8389a3;
+        --iceberg-cursorline:#dcdfe7;
+    }
+}
+code[class*=language-],pre[class*=language-]{
+    color:var(--iceberg-foreground);
+    background:0 0;
+    font-family:Consolas,Monaco,"Andale Mono","Ubuntu Mono",monospace;
+    text-align:left;
+    white-space:pre;
+    word-spacing:normal;
+    word-break:normal;
+    word-wrap:normal;
+    line-height:1.5;
+    -moz-tab-size:4;
+    -o-tab-size:4;
+    tab-size:4;
+    -webkit-hyphens:none;
+    -moz-hyphens:none;
+    -ms-hyphens:none;
+    hyphens:none
+}
+code[class*=language-] ::-moz-selection,code[class*=language-]::-moz-selection,pre[class*=language-] ::-moz-selection,pre[class*=language-]::-moz-selection{
+    background:var(--iceberg-cursorline)
+}
+code[class*=language-] ::selection,code[class*=language-]::selection,pre[class*=language-] ::selection,pre[class*=language-]::selection{
+    background:var(--iceberg-cursorline)
+}
+pre[class*=language-]{
+    padding:1em;
+    margin:.5em 0;
+    overflow:auto
+}
+:not(pre)>code[class*=language-],pre[class*=language-]{
+    background:var(--iceberg-background)
+}
+:not(pre)>code[class*=language-]{
+    padding:.1em;
+    border-radius:.3em;
+    white-space:normal
+}
+.token.cdata,.token.comment,.token.doctype,.token.prolog{
+    color:var(--iceberg-comment)
+}
+.token.atrule,.token.attr-value,.token.boolean,.token.class-name,.token.command,.token.constant,.token.deleted,.token.function,.token.important,.token.keyword,.token.number,.token.operator,.token.property,.token.punctuation,.token.regex,.token.symbol,.token.tag,.token.builtin,.token.variable{
+    color:var(--iceberg-statement)
+}
+.token.namespace{
+    opacity:.7
+}
+.token.attr-name,.token.char,.token.inserted,.token.selector,.token.string{
+    color:var(--iceberg-special)
+}
+.language-css .token.string,.style .token.string,.token.entity,.token.url{
+    color:var(--icerberg-statement)
+}
+.token.italic{
+    font-style:italic
+}
+.token.entity{
+    cursor:help
+}

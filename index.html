@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Learn a practical, theory-based method for building project master schedules using Process Flow Diagrams, critical-path analysis, and pfd-tools.">
+    <meta property="og:title" content="The Science of Master Scheduling">
+    <meta property="og:description" content="Learn a practical, theory-based method for building project master schedules using Process Flow Diagrams, critical-path analysis, and pfd-tools.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://kuniwak.github.io/pfd-tools/">
+    <meta property="og:image" content="https://kuniwak.github.io/pfd-tools/images/ogp.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <title>The Science of Master Scheduling</title>
+    <link rel="stylesheet" href="./css/pico.min.css">
+    <link rel="stylesheet" href="./css/fontello.css">
+    <link rel="stylesheet" href="./css/prism.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="./images/32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./images/16x16.png">
+    <link rel="apple-touch-icon" type="image/png" sizes="114x114" href="./apple-touch-icon.png">
+    <style>
+      * {
+        --pico-typography-spacing-vertical: 1rem;
+      }
+
+      section {
+        margin-bottom: 2rem;
+      }
+
+      figure, table {
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+      }
+
+      .main {
+        margin-top: 4rem;
+      }
+
+      .table {
+        width: auto;
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 1.5rem;
+      }
+
+      .table caption {
+        white-space: nowrap;
+        font-weight: bold;
+      }
+
+      .table-container {
+        overflow-x: scroll;
+      }
+
+      .figure {
+        text-align: center;
+        margin-bottom: 1.5rem;
+      }
+
+      .figure-caption {
+        font-weight: bold;
+        color: var(--pico-color);
+      }
+
+      .footnote-list {
+        font-size: 80%;
+      }
+
+      .footnote-item-anchor {
+        text-decoration: none;
+      }
+
+      .header-anchor {
+        opacity: 0.1;
+      }
+
+      .header-anchor:hover {
+        opacity: 1.0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <main class="main">
+        <section>
+          <h1 id="title">The Science of Master Scheduling <a href="#title" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h1>
+          <p>
+            How do you decide your project schedules? In this article, I explain the theory behind scheduling and how to
+            create a master schedule. I also introduce
+            <a href="https://github.com/Kuniwak/pfd-tools">pfd-tools</a>, a tool based on the scheduling theory
+            discussed here.
+          </p>
+        </section>
+        <section>
+          <h2 id="tl-dr">TL;DR <a href="#tl-dr" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <ul>
+            <li>
+              Once you have a PFD and element tables, you can mechanically compute a master schedule (using the
+              <code>pfdplan</code> &amp; <code>planmaster</code> commands in pfd-tools)
+            </li>
+            <li>
+              Using scheduling theory lets you pinpoint exactly where to improve (using the
+              <code>criticalpath</code> command in pfd-tools)
+            </li>
+            <li>You can apply this to real projects and actually use it to create a master schedule</li>
+          </ul>
+        </section>
+        <section>
+          <h2 id="preparing-for-the-explanation">Preparing for the explanation <a href="#preparing-for-the-explanation" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <h3 id="what-is-master-schedule">What is a master schedule? <a href="#what-is-master-schedule" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>
+            In this article, I define a master schedule as something that specifies the start and end times of each
+            phase defined in the project (the figure below is a made-up example).
+          </p>
+          <figure id="figure-1" class="figure">
+            <img class="figure-img" src="./images/example-master-schedule.png" width="1200" alt="Gantt chart showing the master schedule for administrator and user-facing features, including phases such as requirements analysis, specification documentation, design, implementation, testing, and release.">
+            <figcaption class="figure-caption">Figure 1: Example of a master schedule <a href="#figure-1" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></figcaption>
+          </figure>
+          <p>
+            Note that there is no formally agreed-upon definition of a master schedule. Various definitions exist (I
+            will not cover other definitions here).
+          </p>
+        </section>
+        <section>
+          <h3 id="what-is-a-process">What is a process? <a href="#what-is-a-process" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>A process is an activity that takes deliverables as input and outputs deliverables.<sup><a href="#footnote-1" id="footnote-src-1" aria-label="Jump to footnote 1.">1</a></sup></p>
+          <p>
+            If you decompose an entire project into small processes and map them to higher-level phases, you can compute
+            a master schedule. For example, assume that feature A is composed of feature A1 and feature A2, and feature
+            A is not complete until both A1 and A2 are complete. If both A1 and A2 go through design, implementation,
+            and system testing, then the high-level phases for feature A can be mapped to local processes as follows:
+            design (A1 design, A2 design), implementation (A1 implementation, A2 implementation), and system testing (A1
+            system test, A2 system test):
+          </p>
+          <div class="table-container">
+            <table id="table-1" class="table striped">
+              <caption>
+                Table 1. Local process and the milestone <a href="#table-1" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>Local process</th>
+                  <th>High-level phase</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Requirements analysis</td>
+                  <td>Requirements analysis</td>
+                </tr>
+                <tr>
+                  <td>Specification description</td>
+                  <td>Specification description</td>
+                </tr>
+                <tr>
+                  <td>Feature A1 design</td>
+                  <td>Design</td>
+                </tr>
+                <tr>
+                  <td>Feature A2 design</td>
+                  <td>Design</td>
+                </tr>
+                <tr>
+                  <td>Feature A1 implementation</td>
+                  <td>Implementation</td>
+                </tr>
+                <tr>
+                  <td>Feature A2 implementation</td>
+                  <td>Implementation</td>
+                </tr>
+                <tr>
+                  <td>Feature A1 system test</td>
+                  <td>System test</td>
+                </tr>
+                <tr>
+                  <td>Feature A2 system test</td>
+                  <td>System test</td>
+                </tr>
+                <tr>
+                  <td>System integration test</td>
+                  <td>System integration test</td>
+                </tr>
+                <tr>
+                  <td>User acceptance test</td>
+                  <td>User acceptance test</td>
+                </tr>
+                <tr>
+                  <td>Release</td>
+                  <td>Release</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The start time of a high-level phase is the earliest start time among its mapped processes. The end time of
+            a phase is the earlier of (a) the start time of the next phase and (b) the latest end time among its mapped
+            processes.
+          </p>
+        </section>
+        <section>
+          <h3 id="what-is-a-pfd">What is a Process Flow Diagram (PFD)? <a href="#what-is-a-pfd" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>
+            A Process Flow Diagram (PFD) is one way to represent processes as a chain of deliverable transformations. It
+            was proposed by Yoshio Shimizu.
+          </p>
+          <p>
+            In a PFD, deliverables are represented as rectangles,<sup><a href="#footnote-2" id="footnote-src-2" aria-label="Jump to footnote 2.">2</a></sup> processes as ellipses, and the inputs and outputs
+            of deliverables to/from processes as arrows.
+          </p>
+          <figure id="figure-2" class="figure">
+            <img class="figure-img" src="./images/pfd-example.png" width="500" alt="A process diagram showing Process P1 receiving two input deliverables (D1 and D2) and producing two output deliverables (D3 and D4).">
+            <figcaption class="figure-caption">Figure 2: Example of a PFD <a href="#figure-2" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></figcaption>
+          </figure>
+          <p>
+            These arrows explicitly show the dependency relationships between processes in the PFD. For example, if you
+            pick one process and trace the arrows backward, you can see which processes must have completed before the
+            chosen process can start.<sup><a href="#footnote-3" id="footnote-src-3" aria-label="Jump to footnote 3.">3</a></sup>
+          </p>
+          <p>
+            Among arrows, there is a special type called a feedback arrow that represents rework.<sup><a href="#footnote-4" id="footnote-src-4" aria-label="Jump to footnote 4.">4</a></sup>
+            If there is a feedback arrow from a deliverable to a process, that means the process must be re-executed when that
+            deliverable is updated. Typical feedback arrows are, for example, from review comments or bug tickets back
+            to implementation.
+          </p>
+          <figure id="figure-3" class="figure">
+            <img class="figure-img" src="./images/simple-dev-process.png" width="800" alt="Workflow diagram showing the development process: Specification → Implement → Implementation → Code Review → Code Review Comments, with a branch from Implementation to Verify → Bug Ticket, and feedback loops returning to Implement.">
+            <figcaption class="figure-caption">Figure 3: Example of a PFD with feedback <a href="#figure-3" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></figcaption>
+          </figure>
+          <p>
+            Strictly speaking, a solid arrow from a deliverable to a process means that the process at the arrow’s head
+            cannot be executed unless the deliverable at the arrow’s tail is complete. In contrast, the dashed feedback
+            arrow means that the process at the arrow’s head can be executed even if the deliverable at the arrow’s tail
+            is not yet complete. In other words, implementation can start even without bug tickets, but once bug tickets
+            appear, fixes (re-execution of implementation) are needed.
+          </p>
+          <p>
+            Information that does not fit in the PFD (detailed descriptions, etc.) is written in element tables. There
+            are deliverable tables for deliverables, and process tables for processes.
+          </p>
+          <div class="table-container">
+            <table id="table-2" class="table striped">
+              <caption>
+                Table 2. Example deliverable table <a href="#table-2" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>Deliverable ID</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>D1</td>
+                  <td>Program code that runs when compiled.</td>
+                </tr>
+                <tr>
+                  <td>D2</td>
+                  <td>Comments on D1 added through code review.</td>
+                </tr>
+                <tr>
+                  <td>D3</td>
+                  <td>Bug tickets describing inputs for which D1 does not satisfy D4.</td>
+                </tr>
+                <tr>
+                  <td>D4</td>
+                  <td>The specification that D1 should satisfy.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-3" class="table striped">
+              <caption>
+                Table 3. Example process table <a href="#table-3" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>Process ID</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>P1</td>
+                  <td>
+                    Write code based on the specification. Repeat fixes until there are no more review comments or bug
+                    tickets.
+                  </td>
+                </tr>
+                <tr>
+                  <td>P2</td>
+                  <td>Have someone other than the implementer review the code.</td>
+                </tr>
+                <tr>
+                  <td>P3</td>
+                  <td>Find defects against the specification.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Two important concepts are <em>initial deliverables</em> and <em>final deliverables</em>:</p>
+          <ul>
+            <li>
+              <em>Initial deliverables</em> are deliverables that are not output from any process; in other words, they
+              are given.
+            </li>
+            <li>
+              <em>Final deliverables</em> are deliverables that are not used as input to any process; in other words,
+              they are the project’s target deliverables. The project aims to output these <em>final deliverables</em>.
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2 id="scheduling-theory">Scheduling theory <a href="#scheduling-theory" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <p>
+            Scheduling theory is a framework that, given process dependencies and each process’s duration, defines all
+            possible execution orders of processes and their total durations. Using scheduling theory, you can check
+            whether an execution order follows the dependency constraints, and you can compute the total duration when
+            that execution order is used.
+          </p>
+          <p>
+            Known scheduling theories include
+            <a href="https://ja.wikipedia.org/wiki/PERT">Program Evaluation and Review Technique</a> (PERT), which uses
+            PERT charts, and various models of the Resource-Constrained Project Scheduling Problem (RCPSP). Here, I
+            introduce three models based on PFDs:
+          </p>
+          <ol>
+            <li>Infinite resources, no feedback arrows</li>
+            <li>Finite resources, no feedback arrows</li>
+            <li>Finite resources, with feedback arrows (this is what pfd-tools calls the Finite resouces Single deliverable Model (FSM) model)</li>
+          </ol>
+          <p>
+            Among the models introduced here, the infinite-resources, no-feedback model is the simplest. So I will first
+            explain the infinite-resources, no-feedback model. Then I will step up to a model that considers resource
+            limits, and finally a model that also considers feedback arrows.
+          </p>
+        </section>
+        <section>
+          <h3 id="model-overview">Model overview <a href="#model-overview" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <h4 id="infinite-resources-no-feedback-arrows">Infinite resources, no feedback arrows <a href="#infinite-resources-no-feedback-arrows" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            In this model, a process is considered <em>executable</em> if all of its input deliverables are ready and
+            the process has never been executed before. Because there are no feedback arrows, there is no rework, and no
+            process is executed more than once. PERT corresponds to this model.
+          </p>
+          <p>
+            This model assumes infinite resources, which makes it simple but unrealistic. Normally, executing a process
+            requires a human resource, and in reality people cannot do multiple tasks at the same time (or their
+            efficiency drops badly even if they can). Therefore, schedules computed with this method tend to have
+            shorter durations than what is realistically achievable. If you want to compute more realistic durations,
+            you need to use a model that considers resource limits, as described later.
+          </p>
+          <p>
+            Below is an example of how the execution of a software development process progresses under the no-rework
+            assumption.
+          </p>
+          <figure id="figure-4" class="figure">
+            <img class="figure-img" src="./images/execution-of-model-1.png" width="800" alt="A four-step diagram showing the creation flow of documents and processes over time (Time 0, Time 1, Time 2, Time 4). At Time 0, only D1 and process P1 are created, while D2, D3, and D4 are not created. As time progresses, P1 executes and creates D2, then P2 and P3 generate D3 and D4 respectively. By Time 4, all documents D1-D4 and all processes P1-P3 are shown as completed.">
+            <figcaption class="figure-caption">
+              Figure 4: Example progression of the infinite-resources, no-feedback model <a href="#figure-4" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>
+            The total duration is computed as follows. If there are multiple processes, they are connected either in
+            parallel or in series. The duration of parallel processes is the maximum of the durations of the processes
+            executed in parallel. The duration of a serial chain of processes is the sum of the durations of the
+            processes in the chain. By recursively applying this, the total duration is uniquely determined.
+          </p>
+        </section>
+        <section>
+          <h4 id="finite-resources-no-feedback-arrows">Finite resources, no feedback arrows <a href="#finite-resources-no-feedback-arrows" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            In this model, a process is considered <em>executable</em> if all of its input deliverables are ready, the
+            process has never been executed before, and it can hold the required resources. There is still no rework
+            because we do not consider feedback arrows. Compared to the previous model, we add the condition that
+            resources must be held. In other words, multiple processes that execute at the same time cannot share the
+            same resource. In the previous model, we could simply execute all processes that satisfied the conditions,
+            but in this model, we must choose processes to execute such that their required resources do not conflict.
+          </p>
+          <p>
+            In this model, in addition to process dependencies, for each process we must specify which resources it
+            needs and how much work those resources will consume. For example, for a process that only person A can
+            handle, you might specify the required resource as “1 A” and set the work consumption to “1 person-day.” If
+            work can be split among multiple people, you can model the work consumption to increase in proportion to the
+            number of required resources.
+          </p>
+          <p>
+            Below is an example of how the execution of a software development process progresses without rework, under
+            this model.
+          </p>
+          <figure id="figure-5" class="figure">
+            <img class="figure-img" src="./images/execution-of-model-2.png" width="800" alt="A four-panel diagram showing the progression of artifact and process creation over time (Time 0, 1, 2, and 5). Each panel displays nodes D1-D4 and processes P1-P3, with arrows indicating dependencies and labels such as Created, Not Created, Remaining, and Execution Complete, illustrating how each artifact becomes created step by step.">
+            <figcaption class="figure-caption">
+              Figure 5: Example progression of the finite-resources, no-feedback model <a href="#figure-5" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>
+            At time 2, processes P2 and P3 (which run from time 1 → 2) require overlapping resources when executed
+            simultaneously, so only one of P2 or P3 can be executed. In this figure, we choose a plan where P2 is
+            executed first, and then P3 is executed after P2 finishes.
+          </p>
+          <p>
+            The total duration is defined by a state transition model. A state records the current time and the
+            remaining work for each process.
+          </p>
+          <ul>
+            <li>
+              In the <em>initial state</em>, the time is 0, and the remaining work for each process is equal to its
+              estimated work.
+            </li>
+            <li>
+              The next state is determined as follows. From the current state, we list all processes that are
+              <em>assignable</em>. A process is <em>assignable</em> if all its input deliverables are ready and its
+              remaining work is non-zero (equivalently, it has not yet completed once). By definition, if a process is
+              <em>assignable</em>, then assigning the required resources makes it <em>executable</em>. Among all subsets
+              of assignable processes, any subset in which no pair of processes has overlapping required resources is
+              called a <em>valid assignment set</em>. From the current state, when we pick one element from a
+              <em>valid assignment set</em>, we know the amount of work that will be consumed. We subtract that from the
+              current remaining work, compute the shortest elapsed time until at least one of the remaining works
+              becomes 0, and use that as the time of the next state. The time difference between the current state and
+              the next state multiplied by the consumed work is subtracted from the remaining work to determine the next
+              remaining work. In this way, we get a next state for each valid assignment set (so we get a state
+              transition model where the assignments are the transition labels).
+            </li>
+            <li>
+              If in some state the remaining work of all processes is zero (i.e., every process has been executed at
+              least once), we call that state a <em>completion state</em>. For any process and any transition path, we
+              will eventually reach a <em>completion state</em>.<sup><a href="#footnote-5" id="footnote-src-5" aria-label="Jump to footnote 5.">5</a></sup>
+            </li>
+          </ul>
+          <p>
+            We call a sequence of assignments (i.e., a transition path) from the <em>initial state</em> to a
+            <em>completion state</em> an <em>execution plan</em>. Any <em>execution plan</em> can be converted into a
+            Gantt chart, so <em>execution plans</em> are important. The duration of each <em>execution plan</em> is the
+            time of its completion state. Usually, there are multiple possible <em>execution plans</em>. Therefore, we
+            want to search for an <em>execution plan</em> with the shortest duration. If you need a guaranteed shortest
+            plan, you can use Dijkstra’s algorithm; if you want a reasonably short plan without a formal guarantee, you
+            can use beam search; if you want a result very quickly, you can use a greedy algorithm.
+          </p>
+        </section>
+        <section>
+          <h4 id="finite-resources-with-feedback-arrows">Finite resources, with feedback arrows <a href="#finite-resources-with-feedback-arrows" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            In this model, a process is considered <em>executable</em> if all input deliverables except for those coming
+            from feedback arrows are ready, and since the last time the versions of any of its input deliverables
+            (including feedback deliverables) were updated, the process has not yet been executed, and it can hold the
+            required resources. This model is implemented in pfd-tools.
+          </p>
+          <p>
+            In this model, every process can be executed more than once. Compared to the previous model, we add the
+            condition of “whether version updates have been processed,” so we need the concept of deliverable versions.
+            In the previous model, a deliverable was created only once, so we did not need versioning.
+          </p>
+          <p>
+            For feedback deliverables, we define a final version beyond which no further changes occur. Once a
+            deliverable has reached its final version, we consider its version to remain unchanged thereafter.
+            Otherwise, versions would keep changing forever and the process executions would never end. Since processes
+            can be executed multiple times, we also need a way to compute the required work for the second and
+            subsequent executions. In reality, the required work usually decreases with each rework. In this method, we
+            model this as “each repetition uses x% of the previous work,” and so on.
+          </p>
+          <p>
+            Below is an example of how the execution of a small software development process progresses under this model
+            (you can check the progression with the <code>pfdrun</code> and <code>pfdrungraph</code> commands in
+            pfd-tools).
+          </p>
+          <figure id="figure-7" class="figure">
+            <img class="figure-img" src="./images/execution-of-model-3.png" width="800" alt="A multi-panel diagram showing the progression of a data-processing workflow over time, from Time 0 to Time 7.25.
+              Each panel illustrates nodes labeled D1, P1, D2, P2, P3, D3, and D4, connected by arrows representing data flow.
+              Nodes display version numbers and “remaining” processing time.
+              Panels show how versions update and how remaining times decrease as processing progresses.
+              Time 0 (Initial State):
+              D1 outputs version 1 data to P1.
+              P1 sends version 1 data to D2, which passes version 0 data to P2 and P3.
+              P2 outputs to D3; P3 outputs to D4.
+              Remaining times: P1 = 1, D2 = 1, P2 = 1, P3 = 3.
+              Time 1:
+              D1 and P1 are completed (colored green).
+              D2 begins processing version 1 data from P1.
+              Unprocessed red arrows indicate pending updates from D2 to P2 and P3.
+              Remaining: P1 = 0.5, D2 = 1.
+              Time 2:
+              P1 is completed.
+              D2 continues processing and sends preliminary output to P2 and P3.
+              Remaining: D2 = 0.5, P3 = 3.
+              Time 2.5:
+              D2 is partially processed (version 2).
+              P1 shows remaining 0.25.
+              Red dotted arrows show unprocessed or pending data flows back toward earlier nodes.
+              Time 5.5:
+              P3 begins processing and shows remaining 1.5.
+              D2 (version 2) sends updated data to P2 and P3.
+              P1 remains with 0.25 remaining time.
+              Time 5.75:
+              D2 is updated to version 3.
+              P3 continues processing unprocessed red-arrow inputs.
+              P2 shows remaining 0.5.
+              Time 7.25 (Complete State):
+              All nodes have completed final processing.
+              Final versions: P1 version 1, D2 version 3, P2 version 2, P3 version 2.
+              Remaining processing times near zero.
+              Arrows indicate that all data dependencies are resolved and no unprocessed flows remain.
+              The entire diagram visually communicates how data versions and remaining processing times evolve over the workflow timeline.">
+            <figcaption class="figure-caption">
+              Figure 7: Example progression of the finite-resources, with-feedback model <a href="#figure-7" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>
+            The method for computing the total duration is similar to the state transition model in the previous
+            section. A state records the current time, the remaining work for each process, the set of deliverables
+            whose versions have been updated but not yet consumed for each process, and the version numbers per
+            deliverable.
+          </p>
+          <ol>
+            <li>
+              In the <em>initial state</em>, the time is 0, the remaining work is equal to the estimated work, and for
+              processes that take initial deliverables as input, those initial deliverables are considered to have been
+              updated but not yet consumed.
+            </li>
+            <li>
+              The definition of <em>assignability</em> differs slightly from the previous model. A process is
+              <em>assignable</em> if all of its input deliverables except those from feedback arrows are ready and at
+              least one of its input deliverables has a version that has been updated but not yet consumed. If a process
+              is <em>assignable</em>, then given the required resources it is <em>executable</em>. Among all subsets of
+              assignable processes, any subset in which no pair of processes has overlapping resources is a
+              <em>valid assignment set</em>. From the current state, when we pick an element from a
+              <em>valid assignment set</em>, we know the consumed work. We subtract that from the current remaining
+              work, compute the shortest elapsed time until at least one process’s remaining work becomes 0, and use
+              that as the time of the next state. We compute the time difference between the current state and the next
+              state and subtract “time elapsed × consumed work” to determine the base for the next remaining work. From
+              this base, for processes whose remaining work becomes 0 and will be re-executed, we add back the rework
+              amount (in this example, we set a re-execution work ratio x per process and compute rework as
+              <code>estimated work * pow(x, number_of_executions)</code>. The number of executions of a process equals
+              the version of its output deliverables). In this way, we obtain the next remaining work. So we again get a
+              state transition model with the assignments as transition labels.
+            </li>
+            <li>
+              If in some state all processes are <em>not assignable</em>, we call that state a
+              <em>completion state</em>. It is not yet fully proven that every path from the initial state eventually
+              reaches a completion state, but empirically this seems to hold.
+            </li>
+          </ol>
+          <p>
+            As before, we call a sequence of assignments (i.e., a transition path) from the
+            <em>initial state</em> to a <em>completion state</em> an <em>execution plan</em>. Any
+            <em>execution plan</em> can be converted into a Gantt chart, so <em>execution plans</em> are important. The
+            duration of an execution plan is the time of its completion state. As with the previous model, there can be
+            multiple execution plans, so it is useful to search for the plan with the shortest duration. If you need a
+            guaranteed shortest plan, use Dijkstra’s algorithm; if you want a reasonably short one, use beam search; if
+            you just want something fast, use a greedy algorithm.
+          </p>
+        </section>
+        <section>
+          <h3 id="important-elements-not-covered-in-detail">Important elements not covered in detail <a href="#important-elements-not-covered-in-detail" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>
+            For brevity, I skipped two concepts that are actually necessary to compute a realistic master schedule. I
+            will at least name them here.
+          </p>
+        </section>
+        <section>
+          <h4 id="time-stamped-initial-deliverables">Time-stamped initial deliverables <a href="#time-stamped-initial-deliverables" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            This is an extension that allows you to specify when an initial deliverable becomes available. You can model
+            deliverables that will be created in the future by external processes and whose delivery date has been
+            agreed upon.
+          </p>
+        </section>
+        <section>
+          <h4 id="triggers">Triggers <a href="#triggers" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            This is an extension that adds extra conditions to assignability. Normally, you do not start the next test
+            level before the previous test level has finished. You can model this as a trigger condition that prevents
+            the next test level from starting until the feedback loop of the previous test level is complete.
+          </p>
+        </section>
+        <section>
+          <h3 id="master-schedule">Master schedule <a href="#master-schedule" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>
+            As mentioned earlier, once you map processes to phases, you can compute the master schedule from their start
+            and end times. The start and end times are all included in the execution plan, so as long as you have an
+            execution plan and a mapping from processes to high-level phases, you can compute a master schedule (in
+            pfd-tools, <code>planmaster</code> is responsible for this).
+          </p>
+        </section>
+        <section>
+          <h4 id="critical-path">Critical path <a href="#critical-path" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <p>
+            A <em>critical path</em> is the set of processes such that increasing their duration or required work
+            increases the overall duration. For example, assume there are two parallel processes A and B with durations
+            5 and 10, respectively.
+          </p>
+          <figure id="figure-8" class="figure">
+            <img class="figure-img" src="./images/procA-and-procB.png" width="300" alt="A timeline diagram showing two processes. Process A starts at time 0 and ends before time 5. Process B spans the entire timeline from 0 to 10. A horizontal arrow labeled 'Total duration' runs from 0 to 10 at the top. A dashed vertical line marks the endpoint at time 10.">
+            <figcaption class="figure-caption">Figure 8: Gantt chart of processes A and B <a href="#figure-8" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></figcaption>
+          </figure>
+          <p>
+            If you increase the duration of process B, the overall duration increases, but if you increase the duration
+            of process A, the overall duration does not change.
+          </p>
+          <figure id="figure-9" class="figure">
+            <img class="figure-img" src="./images/critical-path.png" width="600" alt="Two side-by-side timeline diagrams.
+              The left diagram shows Process A (ending at time 5) and Process B (ending at time 10). A small extension to Process A does not change the total project duration.
+              The right diagram shows the same processes, but an extension at the end of Process B pushes the project finish time beyond 10, increasing the total duration.">
+            <figcaption class="figure-caption">
+              Figure 9: Comparison when the durations of processes A and B are extended <a href="#figure-9" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>So B is on the <em>critical path</em>, whereas A is not.</p>
+          <p>
+            If the duration of a process on the <em>critical path</em> becomes longer than planned, the overall duration
+            also increases. Therefore, processes on the <em>critical path</em> are ones you must pay special attention
+            to.
+          </p>
+          <p>
+            On the other hand, increasing the duration or required work of a process that is not on the critical path
+            will not affect the overall duration, up to some limit. This maximum range within which you can increase a
+            process’s duration or required work without changing the overall duration is called
+            <em>total float</em>. The total float of every process on the critical path is zero.
+          </p>
+          <figure id="figure-10" class="figure">
+            <img class="figure-img" src="./images/total-float.png" width="300" alt="Scheduling diagram with two processes. Process A lasts from time 0 to 5 and has a total float of 5 until the project end at time 10. Process B runs from time 0 to 10 with zero total float, indicating it is on the critical path.">
+            <figcaption class="figure-caption">
+              Figure 10: Total float of processes A and B <a href="#figure-10" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>
+            If there are processes whose durations or required work you have not yet estimated, you can compute their
+            <em>total float</em> and, by interviewing the team, check whether the sum of serial durations in that part
+            will exceed the total float. That lets you quickly judge whether the overall duration is likely to increase.
+            If the sum exceeds the total float, that process becomes part of the <em>critical path</em>, so it should be
+            treated with care.
+          </p>
+          <p>
+            The <em>critical path</em> is also important when shortening the project duration. To shorten the duration,
+            you need to repeat the following cycle:
+          </p>
+          <ol>
+            <li>Identify the <em>critical path</em>.</li>
+            <li>Improve all processes on that <em>critical path</em>.</li>
+            <li>Go back to step 1.</li>
+          </ol>
+          <p>
+            You need to repeat this because, as you reduce the duration or work of processes on one critical path, there
+            comes a point where the overall duration no longer decreases. For example, in the parallel A/B example, if
+            you shorten the duration of process B below 5, the overall duration will not become shorter than 5.
+          </p>
+          <figure id="figure-11" class="figure">
+            <img class="figure-img" src="./images/minimum-elastic-value.png" width="300" alt="Diagram showing that even if Process B’s duration is greatly reduced, the overall project duration cannot go below 5 units. Process A runs from time 0 to 5, while Process B starts at time 5 and extends to time 10, illustrating a minimum elastic value of 5.">
+            <figcaption class="figure-caption">
+              Figure 11: Minimum elasticity value of process B <a href="#figure-11" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <p>This happens because the critical path switches from the one containing B to the one containing A.</p>
+          <p>
+            In this way, each process on the <em>critical path</em> may have a minimum duration or required work such
+            that reducing it further no longer reduces the overall duration. I call this the
+            <em>minimum elasticity value</em>.<sup><a href="#footnote-6" id="footnote-src-6" aria-label="Jump to footnote 6.">6</a></sup>
+            Processes that have a minimum elasticity value are worth focusing on because improving them can shorten
+            the overall duration.
+          </p>
+          <p>
+            To identify the critical path, fix an execution plan and, for each process you want to inspect, increase its
+            required work and check whether the overall duration increases. Assume all consumed work amounts are 1, let
+            <code>x</code> be the amount by which you increase the required work of the process, and let
+            <code>y</code> be the amount by which the overall duration increases. Then
+            <code>x - y</code>
+            is the <em>total float</em>. Processes with total float 0 are on the <em>critical path</em>. This is how you
+            identify the critical path (the <code>criticalpath</code> command does the same).
+          </p>
+          <p>
+            Similarly, again assuming consumed work is 1, take a process on the <em>critical path</em>, reduce its
+            required work to 0, and let <code>z</code> be the amount by which the overall duration decreases. Then
+            <code>original_required_work - z</code> is the <em>minimum elasticity value</em>. This is how you compute
+            the minimum elasticity value (the <code>criticalpath</code> command does the same).
+          </p>
+        </section>
+        <section>
+          <h3 id="shortening-the-overall-duration">Shortening the overall duration <a href="#shortening-the-overall-duration" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h3>
+          <p>
+            Once you identify the <em>critical path</em> and improve all processes on it, you can shorten the overall
+            duration. Possible ways to improve processes include the following.
+          </p>
+        </section>
+        <section>
+          <h4 id="efficiency-improvements">Efficiency improvements <a href="#efficiency-improvements" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <h5 id="turn-serial-process-into-parallel-ones">Turn serial processes into parallel ones <a href="#turn-serial-process-into-parallel-ones" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to a graph operation that turns serial parts into parallel ones. The duration changes from
+            a sum to a max, so you can shorten the duration. However, you often end up using earlier-stage deliverables
+            instead of the originally planned deliverables, which makes this approach speculative.
+          </p>
+        </section>
+        <section>
+          <h5 id="make-work-splittable">Make work splittable <a href="#make-work-splittable" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to editing rows in the process table for resource assignments and consumed work. If there
+            are idle resources, you can use them to increase the consumed work per unit time and thus shorten durations.
+            For example, by decomposing deliverables so that independent parts can be created in parallel, you can
+            realize this.
+          </p>
+        </section>
+        <section>
+          <h4 id="shifting-from-cost-to-delivery">Shifting from Cost to Delivery <a href="#shifting-from-cost-to-delivery" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <h5 id="reuse-existing-assets">Reuse existing assets <a href="#reuse-existing-assets" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to a graph operation that removes all elements reachable when tracing backward from a
+            deliverable and replaces them with initial deliverables. If the removed processes are on the critical path,
+            their durations effectively become zero, which can significantly shorten the overall duration. However, the
+            cost of acquiring the existing assets increases.
+          </p>
+        </section>
+        <section>
+          <h5 id="automate-with-tools">Automate with tools <a href="#automate-with-tools" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to loosening the resource assignment constraints and increasing consumed work in the
+            process table. If using tools incurs costs, your financial cost will go up.
+          </p>
+        </section>
+        <section>
+          <h5 id="add-resources">Add resources <a href="#add-resources" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to adding rows to the resource table. Valid assignment sets increase, so if there are
+            processes that can be split, you can increase the consumed work and shorten the duration. It is well-known
+            from “The Mythical Man-Month” that adding people to a late project often makes it even later. However, if
+            the PFD and element tables are sufficiently well-written, learning and communication costs may be relatively
+            low, so I am less pessimistic than Brooks.
+          </p>
+        </section>
+        <section>
+          <h4 id="shifting-from-quality-to-delivery">Shifting from Quality to Delivery <a href="#shifting-from-quality-to-delivery" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h4>
+          <h5 id="reduce-scope-and-thus-reduce-durations-or-required-work">Reduce scope and thus reduce durations or required work <a href="#reduce-scope-and-thus-reduce-durations-or-required-work" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This corresponds to decreasing durations or required work in the process table. Note that this implies
+            reducing the scope of all reachable deliverables (including final deliverables).
+          </p>
+        </section>
+        <section>
+          <h5 id="accept-the-risk-of-quality-degradation-and-reduce-durations">Accept the risk of quality degradation and reduce durations <a href="#accept-the-risk-of-quality-degradation-and-reduce-durations" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h5>
+          <p>
+            This also corresponds to decreasing durations or required work in the process table. You take on the risk
+            that final quality may become unacceptable. This should be avoided as much as possible.
+          </p>
+        </section>
+        <section>
+          <h2 id="how-the-schedule-was-created-in-this-case">How the schedule was created in this case <a href="#how-the-schedule-was-created-in-this-case" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <p>
+            In this case study, I used the third model of scheduling theory described above (limited resources with
+            feedback arrows) to create a schedule as follows. Whether the plan can actually be achieved with the
+            intended schedule and quality is something that will only become clear going forward.
+          </p>
+          <pre class="language-shell-session" tabindex="0"><code class="language-shell-session"><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the PFD collaboratively with stakeholders on diagrams.net in Google Drive, then download it locally:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token function">cat</span> ./pfd.drawio</span></span>
+<span class="token output">&lt;mxfile host="65bd71144e"&gt;
+    &lt;diagram id="ZC_KSqUXoirMDHc_9cWT" name="P0"&gt;
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Assign IDs with pfdrenum:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdrenum <span class="token parameter variable">-inplace</span> ./pfd.drawio</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Immediately overwrite the PFD on Google Drive with this.</span></span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create an empty composite deliverable table:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token builtin class-name">printf</span> <span class="token string">"ID<span class="token entity">\t</span>Description<span class="token entity">\t</span>Deliverables<span class="token entity">\n</span>"</span> <span class="token operator">&gt;</span> ./cd.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Generate the process table from the PFD:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtable <span class="token parameter variable">-p</span> ./pfd.drawio <span class="token parameter variable">-cd</span> cd.tsv <span class="token parameter variable">-t</span> ap <span class="token operator">&gt;</span> ./ap.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Add extended columns to the process table:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./ap.tsv</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token function">head</span> <span class="token parameter variable">-1</span> ./ap.tsv</span></span>
+<span class="token output">ID      Description     EstimatedWork   EstimatedReworkRatio   RequiredResources       StartCondition  Group   Milestone
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Generate the deliverable table from the PFD:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtable <span class="token parameter variable">-p</span> ./pfd.drawio <span class="token parameter variable">-cd</span> cd.tsv <span class="token parameter variable">-t</span> ad <span class="token operator">&gt;</span> ./ad.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Generate the composite process table from the PFD:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtable <span class="token parameter variable">-p</span> ./pfd.drawio <span class="token parameter variable">-cd</span> cd.tsv <span class="token parameter variable">-t</span> <span class="token function">cp</span> <span class="token operator">&gt;</span> ./cp.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Generate the resource table from the PFD and process table:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtable <span class="token parameter variable">-p</span> ./pfd.drawio <span class="token parameter variable">-cd</span> cd.tsv <span class="token parameter variable">-t</span> r <span class="token operator">&gt;</span> ./r.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the process group table for the master schedule (not yet supported by pfdtable):</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./g.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the milestone table for the master schedule (not yet supported by pfdtable):</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./m.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Have all processes on the PFD estimated with two-point estimates (optimistic and pessimistic) collaboratively with stakeholders.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Because we had no historical data, we roughly decided re-execution ratios and the final version counts of deliverables by trial and error.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Record optimistic estimated work in ./ap1.tsv:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token function">cp</span> ./ap<span class="token punctuation">{</span>,1<span class="token punctuation">}</span>.tsv</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./ap1.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Record pessimistic estimated work in ./ap2.tsv:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token function">cp</span> ./ap<span class="token punctuation">{</span>,2<span class="token punctuation">}</span>.tsv</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./ap2.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Since specifying all the element tables every time is cumbersome, create project files:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token builtin class-name">echo</span> <span class="token string">'{"pfd":"pfd.drawio","atomic_process_table":"ap1.tsv","atomic_deliverable_table":"ad.tsv","resource_table":"r.tsv","composite_deliverable_table":"cd.tsv","milestone_table":"m.tsv","group_table":"g.tsv"}'</span> <span class="token operator">&gt;</span> ./project1.json</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token builtin class-name">echo</span> <span class="token string">'{"pfd":"pfd.drawio","atomic_process_table":"ap2.tsv","atomic_deliverable_table":"ad.tsv","resource_table":"r.tsv","composite_deliverable_table":"cd.tsv","milestone_table":"m.tsv","group_table":"g.tsv"}'</span> <span class="token operator">&gt;</span> ./project2.json</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Check consistency. If pfdlint finishes normally, there is no problem.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># If it exits abnormally, fix the problems until it finishes normally:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdlint <span class="token parameter variable">-f</span> ./project1.json</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdlint <span class="token parameter variable">-f</span> ./project2.json</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the optimistic execution plan:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdplan <span class="token parameter variable">-f</span> ./project1.json <span class="token parameter variable">-poor</span> -out-format plan-json <span class="token operator">|</span> <span class="token function">tee</span> ./plan.json</span></span>
+<span class="token output">{
+  "initial_state": {
+    "time": 0,
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Convert the execution plan into a format readable by Google Sheets Timeline view:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtimeline <span class="token parameter variable">-f</span> ./project1.json <span class="token parameter variable">-start</span> <span class="token number">2025</span>-04-01 -not-biz-days <span class="token operator">&lt;</span><span class="token punctuation">(</span>holidays <span class="token parameter variable">-locale</span> ja<span class="token punctuation">)</span> ./plan.json <span class="token operator">|</span> <span class="token function">tee</span> ./timeline1.tsv</span></span>
+<span class="token output">AtomicProcess   NumOfComplete   AllocatedResources      Description     StartTime       EndTime Start   End
+P1      0       Biz     Do requirements analysis       2025-04-08 10:00:00     2025-04-22 10:00:00     5       15
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Paste into Google Sheets:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pbcopy <span class="token operator">&lt;</span> ./timeline1.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the pessimistic execution plan:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdplan <span class="token parameter variable">-f</span> ./project1.json <span class="token parameter variable">-poor</span> -out-format plan-json <span class="token operator">|</span> <span class="token function">tee</span> ./plan.json</span></span>
+<span class="token output">{
+  "initial_state": {
+    "time": 0,
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Convert the execution plan into a format readable by Google Sheets Timeline view:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdtimeline <span class="token parameter variable">-f</span> ./project1.json <span class="token parameter variable">-start</span> <span class="token number">2025</span>-04-01 -not-biz-days <span class="token operator">&lt;</span><span class="token punctuation">(</span>holidays <span class="token parameter variable">-locale</span> ja<span class="token punctuation">)</span> ./plan.json <span class="token operator">|</span> <span class="token function">tee</span> ./timeline2.tsv</span></span>
+<span class="token output">AtomicProcess   NumOfComplete   AllocatedResources      Description     StartTime       EndTime Start   End
+P1      0       Biz     Do requirements analysis       2025-04-08 10:00:00     2025-04-22 10:00:00     5       15
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Paste into Google Sheets:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pbcopy <span class="token operator">&lt;</span> ./timeline2.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Check the execution plans with Google Timeline view, look for unintended dependencies or missing triggers.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># If there is a problem, use pfdquery and others to investigate the cause and fix the PFD or process table.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdquery <span class="token parameter variable">-f</span> ./project.json P20</span></span>
+<span class="token output">QUERY   SOURCE  RESULT
+P20     PFD[desc]       Release under IP restriction
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Check the difference between optimistic and pessimistic release times and report it as uncertainty.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Create the master schedule using the optimistic estimate with a 1.5x buffer:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">planmaster <span class="token parameter variable">-ap</span> ./ap1.tsv <span class="token parameter variable">-g</span> ./g.tsv <span class="token parameter variable">-m</span> ./m.tsv <span class="token parameter variable">-p</span> ./plan.json <span class="token parameter variable">-b</span> <span class="token number">1.5</span> <span class="token parameter variable">-start</span> <span class="token number">2025</span>-04-01 -not-biz-days <span class="token operator">&lt;</span><span class="token punctuation">(</span>holidays <span class="token parameter variable">-locale</span> ja<span class="token punctuation">)</span> <span class="token operator">|</span> <span class="token function">tee</span> ./master.tsv</span></span>
+<span class="token output">Group   GroupDescription        Milestone       MilestoneDescription    Start   End
+Admin   Admin features  M1      Requirements analysis  2025-04-10 14:30:00     2025-05-02 14:30:00
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Paste the master schedule into Google Sheets:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pbcopy <span class="token operator">&lt;</span> ./master.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># At this point, check whether the deadline can be met.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># In this case, it could not be met, so we started process improvements.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Perform critical path analysis. Processes whose TOTAL_FLOAT is 0 are on the critical path:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">criticalpath <span class="token parameter variable">-f</span> ./project.json <span class="token parameter variable">-poor</span> <span class="token operator">|</span> <span class="token function">tee</span> ./criticalpath.tsv</span></span>
+<span class="token output">ATOMIC_PROCESS  TOTAL_FLOAT     MINIMUM_ELASTICITY
+P1      0.00    10.00
+P2      35.73   5.00
+...
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># For every process on the critical path, interview the owners about options that could be scoped out,</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># get approval from the responsible person, and then scope them out. Update the estimated work accordingly:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./ap1.tsv</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">edit ./ap2.tsv</span></span>
+
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Repeat critical path analysis and continue scope reduction until the target is reached.</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Once the target is reached, fix the scope and recompute the master schedule:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pfdplan <span class="token parameter variable">-f</span> ./project1.json <span class="token parameter variable">-poor</span> -out-format plan-json <span class="token operator">|</span> <span class="token function">tee</span> ./plan.json</span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">planmaster <span class="token parameter variable">-ap</span> ./ap1.tsv <span class="token parameter variable">-g</span> ./g.tsv <span class="token parameter variable">-m</span> ./m.tsv <span class="token parameter variable">-p</span> ./plan.json <span class="token parameter variable">-b</span> <span class="token number">1.5</span> <span class="token parameter variable">-start</span> <span class="token number">2025</span>-04-01 -not-biz-days <span class="token operator">&lt;</span><span class="token punctuation">(</span>holidays <span class="token parameter variable">-locale</span> ja<span class="token punctuation">)</span> <span class="token operator">|</span> <span class="token function">tee</span> ./master.tsv</span></span>
+<span class="token output">Group   GroupDescription        Milestone       MilestoneDescription    Start   End
+Admin   Admin features  M1      Requirements analysis  2025-04-10 14:30:00     2025-05-02 14:30:00
+
+</span><span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash"><span class="token comment"># Update the master schedule in Google Sheets and you’re done:</span></span></span>
+<span class="token command"><span class="token shell-symbol important">$</span> <span class="token bash language-bash">pbcopy <span class="token operator">&lt;</span> ./master.tsv</span></span>
+</code></pre>
+          <p>
+            The contents of the deliverables that appeared along the way (these were created arbitrarily for this
+            article):
+          </p>
+          <figure id="figure-12" class="figure">
+            <a href="./images/pfd.png"><img class="figure-img" src="./images/pfd.png" alt="Workflow diagram showing the end-to-end software development process from requirements to production release, with many interconnected tasks and dependencies." ></a>
+            <figcaption class="figure-caption">
+              Figure 12: PFD (<code>./pfd.drawio</code>) <a href="#figure-12" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+            </figcaption>
+          </figure>
+          <div class="table-container">
+            <table id="table-4" class="table striped">
+              <caption>
+                Table 4. Process table (<code>./ap1.tsv</code>) <a href="#table-4" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                  <th>Estimated work</th>
+                  <th>Estimated rework ratio</th>
+                  <th>Required resources</th>
+                  <th>Start condition</th>
+                  <th>Group</th>
+                  <th>Milestone</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>P1</td>
+                  <td>Do requirements analysis</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>Biz:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M1</td>
+                </tr>
+                <tr>
+                  <td>P2</td>
+                  <td>Describe screen transition specification</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>Front,Designer:2;Designer:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M2</td>
+                </tr>
+                <tr>
+                  <td>P3</td>
+                  <td>Design infrastructure</td>
+                  <td>5</td>
+                  <td>0.1</td>
+                  <td>SRE:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M3a</td>
+                </tr>
+                <tr>
+                  <td>P4</td>
+                  <td>Design APIs</td>
+                  <td>8</td>
+                  <td>0.1</td>
+                  <td>App:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M3a</td>
+                </tr>
+                <tr>
+                  <td>P5</td>
+                  <td>Design tables</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>App:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M3a</td>
+                </tr>
+                <tr>
+                  <td>P6</td>
+                  <td>Implement server</td>
+                  <td>20</td>
+                  <td>0.1</td>
+                  <td>App:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P7</td>
+                  <td>Implement admin console</td>
+                  <td>5</td>
+                  <td>0.1</td>
+                  <td>App:1</td>
+                  <td></td>
+                  <td>Admin</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P8</td>
+                  <td>Validate specification</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>SET:1</td>
+                  <td>\complete(*)</td>
+                  <td>User,Admin</td>
+                  <td>M2</td>
+                </tr>
+                <tr>
+                  <td>P9</td>
+                  <td>Design correctness verification</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>TE:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M3c</td>
+                </tr>
+                <tr>
+                  <td>P10</td>
+                  <td>Implement client</td>
+                  <td>15</td>
+                  <td>0.1</td>
+                  <td>Front:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P11</td>
+                  <td>Describe screen UI specification</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>Front,Designer:2;Designer:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M2</td>
+                </tr>
+                <tr>
+                  <td>P12</td>
+                  <td>Review usability</td>
+                  <td>7</td>
+                  <td>0.1</td>
+                  <td>Designer:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M2</td>
+                </tr>
+                <tr>
+                  <td>P13</td>
+                  <td>Code review by SRE</td>
+                  <td>3</td>
+                  <td>0.1</td>
+                  <td>SRE:1</td>
+                  <td>\complete(*)</td>
+                  <td>User</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P14</td>
+                  <td>Design admin operations</td>
+                  <td>5</td>
+                  <td>0.1</td>
+                  <td>Ope:1</td>
+                  <td></td>
+                  <td>Admin</td>
+                  <td>M3a</td>
+                </tr>
+                <tr>
+                  <td>P15</td>
+                  <td>Operator acceptance test</td>
+                  <td>5</td>
+                  <td>0.1</td>
+                  <td>Ope:1</td>
+                  <td>\complete(*)</td>
+                  <td>Admin</td>
+                  <td>M4</td>
+                </tr>
+                <tr>
+                  <td>P16</td>
+                  <td>Integrate server and client</td>
+                  <td>0.2</td>
+                  <td>0.1</td>
+                  <td>App,Front:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P17</td>
+                  <td>System test in development environment</td>
+                  <td>10</td>
+                  <td>0.1</td>
+                  <td>TE:1</td>
+                  <td>\complete(*)</td>
+                  <td>User</td>
+                  <td>M4</td>
+                </tr>
+                <tr>
+                  <td>P18</td>
+                  <td>Integrate with external service in staging</td>
+                  <td>0.2</td>
+                  <td>0.1</td>
+                  <td>App:1</td>
+                  <td></td>
+                  <td>User</td>
+                  <td>M3b</td>
+                </tr>
+                <tr>
+                  <td>P19</td>
+                  <td>Perform system integration test</td>
+                  <td>5</td>
+                  <td>0.1</td>
+                  <td>TE:1</td>
+                  <td>\complete(*)</td>
+                  <td>User</td>
+                  <td>M5</td>
+                </tr>
+                <tr>
+                  <td>P20</td>
+                  <td>Release with IP restriction</td>
+                  <td>0</td>
+                  <td>0.1</td>
+                  <td>SRE:1</td>
+                  <td>\complete(*)</td>
+                  <td>User,Admin</td>
+                  <td>M6</td>
+                </tr>
+                <tr>
+                  <td>P21</td>
+                  <td>Perform production verification</td>
+                  <td>1</td>
+                  <td>0.1</td>
+                  <td>TE:1</td>
+                  <td>\complete(*)</td>
+                  <td>User,Admin</td>
+                  <td>M6</td>
+                </tr>
+                <tr>
+                  <td>P22</td>
+                  <td>Remove IP restriction</td>
+                  <td>0</td>
+                  <td>0.1</td>
+                  <td>SRE:1</td>
+                  <td></td>
+                  <td>User,Admin</td>
+                  <td>M7</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-5" class="table striped">
+              <caption>
+                Table 5. Composite process table (<code>./cp.tsv</code>) <a href="#table-5" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>(empty)</td>
+                  <td>(empty)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-6" class="table striped">
+              <caption>
+                Table 6. Deliverable table (<code>./ad.tsv</code>) <a href="#table-6" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                  <th>Available time</th>
+                  <th>Max version</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>D1</td>
+                  <td>New feature system that has been released and is available to users.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D4</td>
+                  <td>Figma comments on the screen UI specification used to improve usability.</td>
+                  <td>-</td>
+                  <td>2</td>
+                </tr>
+                <tr>
+                  <td>D5</td>
+                  <td>Inputs that cause safety, liveness, or reachability violations.</td>
+                  <td>-</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>D7</td>
+                  <td>Code review comments from SRE on GitHub.</td>
+                  <td>-</td>
+                  <td>2</td>
+                </tr>
+                <tr>
+                  <td>D8</td>
+                  <td>Acceptance test bug tickets created by operators.</td>
+                  <td>-</td>
+                  <td>2</td>
+                </tr>
+                <tr>
+                  <td>D9</td>
+                  <td>Improvement requests for the service received by customer support from users.</td>
+                  <td>0</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D10</td>
+                  <td>Business strategy document describing which users to target in the future.</td>
+                  <td>5</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D11</td>
+                  <td>External service X.</td>
+                  <td>15</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D12</td>
+                  <td>Functional requirements expressed in terms of liveness and reachability.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D13</td>
+                  <td>Non-functional requirements expressed in terms of safety and performance.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D14</td>
+                  <td>User personas.</td>
+                  <td>0</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D15</td>
+                  <td>
+                    Screen transition specification. A state transition diagram where screens are states and transitions
+                    are annotated by (event, guard, postcondition) triples.
+                  </td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D16</td>
+                  <td>Infrastructure configuration diagram.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D17</td>
+                  <td>API specification expressed as signatures and pairs of preconditions and postconditions.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D18</td>
+                  <td>Table definition document expressed in DDL.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D19</td>
+                  <td>Server implementation.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D20</td>
+                  <td>Web server implementation of the admin console operated by administrators.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D21</td>
+                  <td>Test cases related to user-facing features.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D22</td>
+                  <td>Client implementation.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D23</td>
+                  <td>Screen UI specification describing representative layouts and interactions per screen.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D24</td>
+                  <td>Admin operation manual describing steps for each expected operational scenario.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D25</td>
+                  <td>Newly developed feature system.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D26</td>
+                  <td>Newly developed feature system integrated with external service X.</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D27</td>
+                  <td>
+                    System integrated with external service X with IP restriction limiting access to internal users only.
+                    End-users cannot use the service yet.
+                  </td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td>D3.1</td>
+                  <td>Bug tickets on JIRA originating from production verification.</td>
+                  <td>-</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>D3.2</td>
+                  <td>Bug tickets on JIRA originating from system integration testing.</td>
+                  <td>-</td>
+                  <td>2</td>
+                </tr>
+                <tr>
+                  <td>D3.3</td>
+                  <td>Bug tickets on JIRA originating from system testing.</td>
+                  <td>-</td>
+                  <td>3</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-7" class="table striped">
+              <caption>
+                Table 7. Composite deliverable table (<code>./cd.tsv</code>) <a href="#table-7" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                  <th>Deliverables</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>D3</td>
+                  <td>Bug tickets for user-facing features in the BTS.</td>
+                  <td>D3.1,D3.2,D3.3</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-8" class="table striped">
+              <caption>
+                Table 8. Process group table (<code>./g.tsv</code>) <a href="#table-8" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>User</td>
+                  <td>User-facing features</td>
+                </tr>
+                <tr>
+                  <td>Admin</td>
+                  <td>Admin features</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-container">
+            <table id="table-9" class="table striped">
+              <caption>
+                Table 9. Milestone table (<code>./m.tsv</code>) <a href="#table-9" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a>
+              </caption>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Description</th>
+                  <th>Groups</th>
+                  <th>Successors</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>M1</td>
+                  <td>Requirements analysis</td>
+                  <td>User,Admin</td>
+                  <td>M2</td>
+                </tr>
+                <tr>
+                  <td>M2</td>
+                  <td>Specification description</td>
+                  <td>User,Admin</td>
+                  <td>M3a,M3b,M3c</td>
+                </tr>
+                <tr>
+                  <td>M3a</td>
+                  <td>Design</td>
+                  <td>User,Admin</td>
+                  <td>M4</td>
+                </tr>
+                <tr>
+                  <td>M3b</td>
+                  <td>Implementation</td>
+                  <td>User,Admin</td>
+                  <td>M4</td>
+                </tr>
+                <tr>
+                  <td>M3c</td>
+                  <td>Test design</td>
+                  <td>User,Admin</td>
+                  <td>M4</td>
+                </tr>
+                <tr>
+                  <td>M4</td>
+                  <td>System test</td>
+                  <td>User,Admin</td>
+                  <td>M5</td>
+                </tr>
+                <tr>
+                  <td>M5</td>
+                  <td>System integration test</td>
+                  <td>User,Admin</td>
+                  <td>M6</td>
+                </tr>
+                <tr>
+                  <td>M6</td>
+                  <td>Production verification</td>
+                  <td>User,Admin</td>
+                  <td>M7</td>
+                </tr>
+                <tr>
+                  <td>M7</td>
+                  <td>Release</td>
+                  <td>User,Admin</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section>
+          <h2 id="conclusion">Conclusion <a href="#conclusion" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <p>
+            In this article, I introduced the theory of master scheduling and how it was applied in practice at
+            Coincheck. To summarize:
+          </p>
+          <ul>
+            <li>Once you have a PFD and element tables, you can mechanically compute a master schedule.</li>
+            <li>Using scheduling theory lets you pinpoint exactly where to improve.</li>
+            <li>You can apply this to real projects and actually use it to create schedules.</li>
+          </ul>
+        </section>
+        <hr>
+        <section>
+          <h2 id="footnotes">Footnotes <a href="#footnotes" class="header-anchor" aria-label="Jump to this section."><span class="icon-link" aria-hidden="true"></span></a></h2>
+          <ol class="footnote-list">
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-1" id="footnote-1" aria-label="Back to footnote source.">^</a>
+              “A set of interrelated or interacting activities that transforms inputs into outputs.” ISO25000:2017
+            </li>
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-2" id="footnote-2" aria-label="Back to footnote source.">^</a>
+              In Shimizu’s original proposal, deliverables are drawn with a “document” symbol. He also suggests that
+              you don’t need to stick to the document symbol and can use any symbol that is easy to understand for the
+              deliverable. Here, to keep the explanation simple, I use rectangles for all deliverables.
+            </li>
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-3" id="footnote-3" aria-label="Back to footnote source.">^</a>
+              A representative notation for expressing process dependencies is the PERT chart (or arrow diagram). If
+              you treat deliverables as events, processes as arrows, and annotate each arrow with the process duration,
+              you can transform a PFD into a PERT chart. In other words, a PFD can be regarded as a superset of a PERT
+              chart that emphasizes deliverables. It is a superset, not equivalent, because of the feedback arrows
+              described later. Feedback arrows are not included in PERT charts.
+            </li>
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-4" id="footnote-4" aria-label="Back to footnote source.">^</a>
+              In Shimizu’s original definition there are no dashed arrows. Dashed arrows here are my arrangement to
+              make the direction of updates explicit.
+            </li>
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-5" id="footnote-5" aria-label="Back to footnote source.">^</a>
+              The PFD, excluding feedback arrows, is a finite DAG, and all consumed work amounts are greater than 0.
+              Therefore, in any state that is not a completion state, there is at least one assignable process. Hence the
+              sum of remaining work strictly decreases with each transition, so we must eventually reach a completion
+              state.
+            </li>
+            <li>
+              <a class="footnote-item-anchor" href="#footnote-src-6" id="footnote-6" aria-label="Back to footnote source.">^</a>
+              This is a term coined by the author. Here, I define <em>elasticity</em> as the extent to which
+              changing the duration or required work of a local process changes the overall duration. With this
+              definition, “total float + duration” becomes the <em>maximum non-elastic value</em>. There does not seem to
+              be a PERT term corresponding directly to the minimum elasticity value.
+            </li>
+          </ol>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
