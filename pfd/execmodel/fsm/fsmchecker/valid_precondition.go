@@ -2,6 +2,7 @@ package fsmchecker
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/cmp2"
@@ -26,6 +27,8 @@ var ValidPrecondition = checkers.AtomicChecker[*fsmcommon.Target]{
 		const preconditionCyclicExecutableReferenceProblemID = "precondition-cyclic-executable-reference"
 		const preconditionReachableFeedbackSourceProblemID = "precondition-reachable-feedback-source"
 		const preconditionReachableExecutableTargetProblemID = "precondition-reachable-executable-target"
+		const preconditionInvalidExecBoundProblemID = "precondition-invalid-exec-bound"
+		const preconditionInvalidExecRangeProblemID = "precondition-invalid-exec-range"
 
 		m := make(map[pfd.AtomicProcessID]*fsm.Precondition)
 		for ap, preconditionText := range t.Memoized.PreconditionMap {
@@ -48,34 +51,32 @@ var ValidPrecondition = checkers.AtomicChecker[*fsmcommon.Target]{
 			precondition.Traverse(func(p *fsm.Precondition) {
 				switch p.Type {
 				case fsm.PreconditionTypeFeedbackSourceCompleted:
-					if !t.PFD.AtomicDeliverables.Contains(pfd.AtomicDeliverableID.Compare, p.FeedbackSource) || t.PFD.FeedbackDestinationAtomicProcesses(p.FeedbackSource).Len() == 0 {
-						ch <- checkers.NewProblem(
-							preconditionNotFeedbackSourceProblemID,
-							checkers.SeverityError,
-							fsmcommon.NewLocations(
-								fsmcommon.NewLocation(
-									fsmcommon.LocationTypeAtomicProcessTable,
-									fsmcommon.NewAtomicProcessID(ap),
-									fsmcommon.NewAtomicDeliverableID(p.FeedbackSource),
-								),
-							)...,
-						)
-						return
-					}
+					validateExecBetweenPrecondition(
+						t,
+						ap,
+						p.FeedbackSource,
+						fsm.NewMaxRevisionBound(p.FeedbackSource),
+						fsm.NewInfinityRevisionBound(),
+						ch,
+						preconditionNotFeedbackSourceProblemID,
+						preconditionReachableFeedbackSourceProblemID,
+						preconditionInvalidExecBoundProblemID,
+						preconditionInvalidExecRangeProblemID,
+					)
 
-					ds := sets.NewWithCapacity[pfd.AtomicDeliverableID](t.PFD.AtomicDeliverables.Len())
-					t.PFD.CollectReachableDeliverablesExceptFeedback(ap, ds, t.Logger)
-					if ds.Contains(pfd.AtomicDeliverableID.Compare, p.FeedbackSource) {
-						ch <- checkers.NewProblem(
-							preconditionReachableFeedbackSourceProblemID,
-							checkers.SeverityError,
-							fsmcommon.NewLocation(
-								fsmcommon.LocationTypeAtomicProcessTable,
-								fsmcommon.NewAtomicProcessID(ap),
-								fsmcommon.NewAtomicDeliverableID(p.FeedbackSource),
-							),
-						)
-					}
+				case fsm.PreconditionTypeExecBetween:
+					validateExecBetweenPrecondition(
+						t,
+						ap,
+						p.ExecBetweenTarget,
+						p.ExecBetweenBegin,
+						p.ExecBetweenEnd,
+						ch,
+						preconditionNotFeedbackSourceProblemID,
+						preconditionReachableFeedbackSourceProblemID,
+						preconditionInvalidExecBoundProblemID,
+						preconditionInvalidExecRangeProblemID,
+					)
 
 				case fsm.PreconditionTypeExecutable:
 					if !t.PFD.AtomicProcesses.Contains(pfd.AtomicProcessID.Compare, p.Executable) {
@@ -125,6 +126,143 @@ var ValidPrecondition = checkers.AtomicChecker[*fsmcommon.Target]{
 		}
 		return nil
 	},
+}
+
+type resolvedRevisionBound struct {
+	IsInfinity bool
+	Value      int
+	IDs        []fsmcommon.ID
+}
+
+func validateExecBetweenPrecondition(
+	t *fsmcommon.Target,
+	ap pfd.AtomicProcessID,
+	target pfd.AtomicDeliverableID,
+	begin *fsm.RevisionBound,
+	end *fsm.RevisionBound,
+	ch chan<- checkers.Problem,
+	preconditionNotFeedbackSourceProblemID checkers.ProblemID,
+	preconditionReachableFeedbackSourceProblemID checkers.ProblemID,
+	preconditionInvalidExecBoundProblemID checkers.ProblemID,
+	preconditionInvalidExecRangeProblemID checkers.ProblemID,
+) {
+	locIDs := []fsmcommon.ID{
+		fsmcommon.NewAtomicProcessID(ap),
+		fsmcommon.NewAtomicDeliverableID(target),
+	}
+	if !t.PFD.AtomicDeliverables.Contains(pfd.AtomicDeliverableID.Compare, target) || t.PFD.FeedbackDestinationAtomicProcesses(target).Len() == 0 {
+		ch <- checkers.NewProblem(
+			preconditionNotFeedbackSourceProblemID,
+			checkers.SeverityError,
+			fsmcommon.NewLocation(
+				fsmcommon.LocationTypeAtomicProcessTable,
+				locIDs...,
+			),
+		)
+		return
+	}
+
+	ds := sets.NewWithCapacity[pfd.AtomicDeliverableID](t.PFD.AtomicDeliverables.Len())
+	t.PFD.CollectReachableDeliverablesExceptFeedback(ap, ds, t.Logger)
+	if ds.Contains(pfd.AtomicDeliverableID.Compare, target) {
+		ch <- checkers.NewProblem(
+			preconditionReachableFeedbackSourceProblemID,
+			checkers.SeverityError,
+			fsmcommon.NewLocation(
+				fsmcommon.LocationTypeAtomicProcessTable,
+				locIDs...,
+			),
+		)
+	}
+
+	beginResolved, beginErr := resolveRevisionBound(t, begin)
+	if beginErr != nil {
+		ch <- checkers.NewProblem(
+			preconditionInvalidExecBoundProblemID,
+			checkers.SeverityError,
+			fsmcommon.NewLocation(
+				fsmcommon.LocationTypeAtomicProcessTable,
+				append(locIDs, beginErr...)...,
+			),
+		)
+		return
+	}
+
+	endResolved, endErr := resolveRevisionBound(t, end)
+	if endErr != nil {
+		ch <- checkers.NewProblem(
+			preconditionInvalidExecBoundProblemID,
+			checkers.SeverityError,
+			fsmcommon.NewLocation(
+				fsmcommon.LocationTypeAtomicProcessTable,
+				append(locIDs, endErr...)...,
+			),
+		)
+		return
+	}
+
+	if compareResolvedRevisionBounds(beginResolved, endResolved) >= 0 {
+		related := append([]fsmcommon.ID{}, locIDs...)
+		related = append(related, beginResolved.IDs...)
+		related = append(related, endResolved.IDs...)
+		ch <- checkers.NewProblem(
+			preconditionInvalidExecRangeProblemID,
+			checkers.SeverityError,
+			fsmcommon.NewLocation(
+				fsmcommon.LocationTypeAtomicProcessTable,
+				related...,
+			),
+		)
+	}
+}
+
+func resolveRevisionBound(t *fsmcommon.Target, bound *fsm.RevisionBound) (resolvedRevisionBound, []fsmcommon.ID) {
+	switch bound.Type {
+	case fsm.RevisionBoundTypeInt:
+		return resolvedRevisionBound{
+			Value: bound.IntValue,
+		}, nil
+	case fsm.RevisionBoundTypeInfinity:
+		return resolvedRevisionBound{
+			IsInfinity: true,
+			Value:      math.MaxInt,
+		}, nil
+	case fsm.RevisionBoundTypeMaxRevision:
+		related := []fsmcommon.ID{fsmcommon.NewAtomicDeliverableID(bound.MaxRevisionDeliverable)}
+		if !t.PFD.AtomicDeliverables.Contains(pfd.AtomicDeliverableID.Compare, bound.MaxRevisionDeliverable) || t.PFD.FeedbackDestinationAtomicProcesses(bound.MaxRevisionDeliverable).Len() == 0 {
+			return resolvedRevisionBound{}, related
+		}
+		if !t.Memoized.HasMaxRevisionMap {
+			return resolvedRevisionBound{}, related
+		}
+		maxRevisionText, ok := t.Memoized.MaxRevisionMap[bound.MaxRevisionDeliverable]
+		if !ok {
+			return resolvedRevisionBound{}, related
+		}
+		maxRevision, err := fsmtable.ValidateMaxRevision(maxRevisionText, true)
+		if err != nil {
+			return resolvedRevisionBound{}, related
+		}
+		return resolvedRevisionBound{
+			Value: maxRevision,
+			IDs:   related,
+		}, nil
+	default:
+		panic(fmt.Sprintf("unexpected revision bound type: %v", bound.Type))
+	}
+}
+
+func compareResolvedRevisionBounds(a, b resolvedRevisionBound) int {
+	if a.IsInfinity {
+		if b.IsInfinity {
+			return 0
+		}
+		return 1
+	}
+	if b.IsInfinity {
+		return -1
+	}
+	return a.Value - b.Value
 }
 
 func preconditionExecutableReferenceGraphCycles(preconditionMap map[pfd.AtomicProcessID]*fsm.Precondition) *sets.Set[[]fsmcommon.ID] {

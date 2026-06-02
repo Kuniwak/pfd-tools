@@ -15,10 +15,22 @@ import (
 )
 
 func TestValidPrecondition(t *testing.T) {
+	butterflyADTable := &pfd.AtomicDeliverableTable{
+		ExtraHeaders: []string{fsmtable.MaxRevisionHeaderEn},
+		Rows: []*pfd.AtomicDeliverableRow{
+			{ID: "D1", Description: "Deliverable 1", ExtraCells: []string{`-`}},
+			{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{`-`}},
+			{ID: "D3", Description: "Deliverable 3", ExtraCells: []string{`-`}},
+			{ID: "D4", Description: "Deliverable 4", ExtraCells: []string{`3`}},
+			{ID: "D5", Description: "Deliverable 5", ExtraCells: []string{`3`}},
+		},
+	}
+
 	testCases := map[string]struct {
-		PFD                *pfd.PFD
-		AtomicProcessTable *pfd.AtomicProcessTable
-		Want               []checkers.Problem
+		PFD                    *pfd.PFD
+		AtomicProcessTable     *pfd.AtomicProcessTable
+		AtomicDeliverableTable *pfd.AtomicDeliverableTable
+		Want                   []checkers.Problem
 	}{
 		"ng (syntax error)": {
 			PFD: pfd.PresetButterflyLoop,
@@ -117,6 +129,7 @@ func TestValidPrecondition(t *testing.T) {
 					{ID: "P3", Description: "Process 1", ExtraCells: []string{``}},
 				},
 			},
+			AtomicDeliverableTable: butterflyADTable,
 			Want: []checkers.Problem{
 				checkers.NewProblem(
 					"precondition-reachable-feedback-source",
@@ -125,6 +138,72 @@ func TestValidPrecondition(t *testing.T) {
 						fsmcommon.LocationTypeAtomicProcessTable,
 						fsmcommon.NewAtomicProcessID("P1"),
 						fsmcommon.NewAtomicDeliverableID("D4"),
+					),
+				),
+			},
+		},
+		"ng (invalid exec range with max revisions)": {
+			PFD: pfd.PresetButterflyLoop,
+			AtomicProcessTable: &pfd.AtomicProcessTable{
+				ExtraHeaders: []string{fsmtable.PreconditionColumnHeaderEn},
+				Rows: []*pfd.AtomicProcessRow{
+					{ID: "P1", Description: "Process 1", ExtraCells: []string{`\execBetween(D4, \maxRev(D4), \maxRev(D4))`}},
+					{ID: "P2", Description: "Process 1", ExtraCells: []string{``}},
+					{ID: "P3", Description: "Process 1", ExtraCells: []string{``}},
+				},
+			},
+			AtomicDeliverableTable: butterflyADTable,
+			Want: []checkers.Problem{
+				checkers.NewProblem(
+					"precondition-reachable-feedback-source",
+					checkers.SeverityError,
+					fsmcommon.NewLocation(
+						fsmcommon.LocationTypeAtomicProcessTable,
+						fsmcommon.NewAtomicProcessID("P1"),
+						fsmcommon.NewAtomicDeliverableID("D4"),
+					),
+				),
+				checkers.NewProblem(
+					"precondition-invalid-exec-range",
+					checkers.SeverityError,
+					fsmcommon.NewLocation(
+						fsmcommon.LocationTypeAtomicProcessTable,
+						fsmcommon.NewAtomicProcessID("P1"),
+						fsmcommon.NewAtomicDeliverableID("D4"),
+						fsmcommon.NewAtomicDeliverableID("D4"),
+						fsmcommon.NewAtomicDeliverableID("D4"),
+					),
+				),
+			},
+		},
+		"ng (missing max revision)": {
+			PFD: pfd.PresetButterflyLoop,
+			AtomicProcessTable: &pfd.AtomicProcessTable{
+				ExtraHeaders: []string{fsmtable.PreconditionColumnHeaderEn},
+				Rows: []*pfd.AtomicProcessRow{
+					{ID: "P1", Description: "Process 1", ExtraCells: []string{`\execBetween(D5, \maxRev(D5), \inf)`}},
+					{ID: "P2", Description: "Process 1", ExtraCells: []string{``}},
+					{ID: "P3", Description: "Process 1", ExtraCells: []string{``}},
+				},
+			},
+			Want: []checkers.Problem{
+				checkers.NewProblem(
+					"precondition-reachable-feedback-source",
+					checkers.SeverityError,
+					fsmcommon.NewLocation(
+						fsmcommon.LocationTypeAtomicProcessTable,
+						fsmcommon.NewAtomicProcessID("P1"),
+						fsmcommon.NewAtomicDeliverableID("D5"),
+					),
+				),
+				checkers.NewProblem(
+					"precondition-invalid-exec-bound",
+					checkers.SeverityError,
+					fsmcommon.NewLocation(
+						fsmcommon.LocationTypeAtomicProcessTable,
+						fsmcommon.NewAtomicProcessID("P1"),
+						fsmcommon.NewAtomicDeliverableID("D5"),
+						fsmcommon.NewAtomicDeliverableID("D5"),
 					),
 				),
 			},
@@ -161,7 +240,8 @@ func TestValidPrecondition(t *testing.T) {
 					{ID: "P3", Description: "Process 1", ExtraCells: []string{`\complete(D4) && !\exec(P1) && !\exec(P2)`}},
 				},
 			},
-			Want: []checkers.Problem{},
+			AtomicDeliverableTable: butterflyADTable,
+			Want:                   []checkers.Problem{},
 		},
 	}
 	for name, testCase := range testCases {
@@ -170,14 +250,14 @@ func TestValidPrecondition(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pfd.NewSafePFDByUnsafePFD: %v", err)
 			}
-			m, err := fsmcommon.NewMemoized(testCase.AtomicProcessTable, nil, nil, nil)
+			m, err := fsmcommon.NewMemoized(testCase.AtomicProcessTable, testCase.AtomicDeliverableTable, nil, nil)
 			if err != nil {
 				t.Fatalf("fsmcommon.NewMemoized: %v", err)
 			}
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(p, testCase.AtomicProcessTable, nil, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
+				tgt := fsmcommon.NewTarget(p, testCase.AtomicProcessTable, testCase.AtomicDeliverableTable, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
 				if err := ValidPrecondition.Check(tgt, ch); err != nil {
 					t.Errorf("ValidPrecondition.Check: %v", err)
 				}

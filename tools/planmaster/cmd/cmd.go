@@ -96,8 +96,19 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 		milestoneTable.DescriptionMap(),
 	)
 
-	if err := masterschedule.WriteGoogleSpreadsheetTSV(inout.Stdout, master); err != nil {
-		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	switch opts.OutputFormat {
+	case MasterScheduleOutputFormatMermaid:
+		if err := masterschedule.WriteMermaidGantt(inout.Stdout, master); err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		}
+	case MasterScheduleOutputFormatPlantUML:
+		if err := masterschedule.WritePlantUMLGantt(inout.Stdout, master); err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		}
+	default:
+		if err := masterschedule.WriteGoogleSpreadsheetTSV(inout.Stdout, master); err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		}
 	}
 
 	return nil

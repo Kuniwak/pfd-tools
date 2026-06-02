@@ -35,7 +35,7 @@ func TestNormalize(t *testing.T) {
 					},
 					&pfd.Node{
 						ID:          "D2",
-						Description: "Review\ncomments",
+						Description: "Reviewcomments",
 						Type:        pfd.NodeTypeAtomicDeliverable,
 					},
 					&pfd.Node{
@@ -129,6 +129,64 @@ func TestNormalize(t *testing.T) {
 				DeliverableComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{},
 			},
 			ExpectedSourceMap: exampleSourceMap,
+		},
+		"default_page_name_en": {
+			File: []Diagram{
+				{
+					ID:   "d1",
+					Name: "Page-1",
+					Cells: []Cell{
+						NewRoot("0"),
+						NewLayer("1", ""),
+						NewVertex("2", "1", "P1: Implement", StyleMap{"ellipse": "", "whiteSpace": "wrap", "html": "1"}),
+					},
+				},
+			},
+			ExpectedPFD: &pfd.PFD{
+				Title: "Example",
+				Nodes: sets.New(
+					(*pfd.Node).Compare,
+					&pfd.Node{ID: "P1", Description: "Implement", Type: pfd.NodeTypeAtomicProcess},
+				),
+				Edges:                  sets.New((*pfd.Edge).Compare),
+				ProcessComposition:     map[pfd.NodeID]*sets.Set[pfd.NodeID]{},
+				DeliverableComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{},
+			},
+			ExpectedSourceMap: &SourceMap{
+				NodeIDMap: map[pfd.NodeID]*sets.Set[DrawIOLocation]{
+					"P1": sets.New(DrawIOLocation.Compare, DrawIOLocation{DiagramID: "d1", CellID: "2"}),
+				},
+				EdgeIDMap: map[pfd.NodeID]map[pfd.NodeID]*sets.Set[DrawIOLocation]{},
+			},
+		},
+		"default_page_name_ja": {
+			File: []Diagram{
+				{
+					ID:   "d1",
+					Name: "ページ1",
+					Cells: []Cell{
+						NewRoot("0"),
+						NewLayer("1", ""),
+						NewVertex("2", "1", "P1: Implement", StyleMap{"ellipse": "", "whiteSpace": "wrap", "html": "1"}),
+					},
+				},
+			},
+			ExpectedPFD: &pfd.PFD{
+				Title: "Example",
+				Nodes: sets.New(
+					(*pfd.Node).Compare,
+					&pfd.Node{ID: "P1", Description: "Implement", Type: pfd.NodeTypeAtomicProcess},
+				),
+				Edges:                  sets.New((*pfd.Edge).Compare),
+				ProcessComposition:     map[pfd.NodeID]*sets.Set[pfd.NodeID]{},
+				DeliverableComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{},
+			},
+			ExpectedSourceMap: &SourceMap{
+				NodeIDMap: map[pfd.NodeID]*sets.Set[DrawIOLocation]{
+					"P1": sets.New(DrawIOLocation.Compare, DrawIOLocation{DiagramID: "d1", CellID: "2"}),
+				},
+				EdgeIDMap: map[pfd.NodeID]map[pfd.NodeID]*sets.Set[DrawIOLocation]{},
+			},
 		},
 	}
 

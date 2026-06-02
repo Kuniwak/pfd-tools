@@ -109,7 +109,7 @@ func NormalizeDiagrams(title string, diagrams []Diagram, logger *slog.Logger) (*
 					}
 
 					p.Nodes.Add((*pfd.Node).Compare, &pfd.Node{ID: id, Description: desc, Type: t})
-					if compID != pfd.NodeIDContextDiagram {
+					if !isContextDiagram {
 						p.ProcessComposition[compID].Add(pfd.NodeID.Compare, id)
 					}
 

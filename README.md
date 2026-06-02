@@ -13,6 +13,333 @@ Installation
 Download the latest binary from [Releases](https://github.com/Kuniwak/pfd-tools/releases) and place it in a directory that is in your PATH.
 
 
+Input Files and Creation Steps
+------------------------------
+
+The input data for pfd-tools consists of the PFD body, the various TSV tables that support the PFD, and a configuration JSON that ties them together.
+
+### File list
+
+| File | File format | Role |
+| --- | --- | --- |
+| PFD | draw.io XML file (`.drawio`) or a PNG exported from draw.io (`.drawio.png`) | Defines the dependencies between processes and deliverables |
+| Atomic process table | TSV format | Defines the work volume, needed resources, and start condition for each process |
+| Deliverable table | TSV format | Defines the available time and feedback limits for deliverables |
+| Resource table | TSV format | Defines the dictionary of resource IDs |
+| Composite deliverable table | TSV format | Defines deliverable sets that bundle multiple deliverables |
+| Composite process table | TSV format | Defines higher-level processes that bundle multiple processes |
+| Milestone table | TSV format | Defines the ordering relationships between milestones |
+| Group table | TSV format | Defines the dictionary of groups |
+| Project configuration file | JSON format | Bundles the individual definition files and passes them to the tool |
+| Critical path analysis result | TSV format | Stores the output of the `criticalpath` command |
+
+The minimal configuration consists of the PFD, the atomic process table, the deliverable table, the composite deliverable table, the composite process table, and the resource table. With just these you can run `pfdlint` and `pfdplan`. If you use the master schedule (`planmaster`), you additionally need the milestone table and the group table.
+
+### 1. Project configuration file
+
+This is an execution setting that bundles the paths of the individual definition files. You specify it with the `-f` option of commands such as `pfdlint`, `pfdplan`, and `criticalpath`.
+
+```json
+{
+  "pfd": "pfd.drawio",
+  "atomic_process_table": "ap.tsv",
+  "atomic_deliverable_table": "ad.tsv",
+  "resource_table": "r.tsv",
+  "composite_process_table": "cp.tsv",
+  "composite_deliverable_table": "cd.tsv",
+  "milestone_table": "m.tsv",
+  "group_table": "g.tsv"
+}
+```
+
+| Key | Type | Meaning | Required |
+| --- | --- | --- | --- |
+| `pfd` | string  | Path to the PFD body | ✅ |
+| `atomic_process_table` | string  | Path to the atomic process table | ✅ |
+| `atomic_deliverable_table` | string  | Path to the deliverable table | ✅ |
+| `resource_table` | string  | Path to the resource table | ❌ |
+| `composite_process_table` | string  | Path to the composite process table | ❌ |
+| `composite_deliverable_table` | string  | Path to the composite deliverable table | ✅ |
+| `milestone_table` | string  | Path to the milestone table | ❌ (required when using `planmaster`) |
+| `group_table` | string  | Path to the group table | ❌ (required when using `planmaster`) |
+
+When you handle multiple estimates such as optimistic/pessimistic, prepare multiple configuration files that swap out only the `atomic_process_table` (e.g., `project1.json`, `project2.json`).
+
+### 2. PFD body
+
+This is a draw.io XML file. It defines the dependencies between processes and deliverables as a diagram.
+
+All commands that take a PFD as input (`pfdrenum`, `pfdlint`, `pfdplan`, `pfdtable`, `pfdquery`, `pfddiff`, `plantimeline`, `criticalpath`, etc.) accept, in addition to `.drawio` (XML), a PNG exported from draw.io (`.drawio.png`) as input. For a PNG, the embedded mxfile is extracted from the file and processed. For PNG input, `pfdrenum` returns PNG output (it rewrites only the tEXt chunk of the mxfile and leaves the image itself unchanged).
+
+| Element | Representation in draw.io | Meaning |
+| --- | --- | --- |
+| Atomic process | Thin-line ellipse (strokeWidth=1) | An indivisible unit of work |
+| Composite process | Thick-line ellipse (strokeWidth>1) | A higher-level process that bundles multiple processes |
+| Atomic deliverable | Thin-line rectangle (strokeWidth=1) | A deliverable that is an input/output of a process |
+| Composite deliverable | Thick-line rectangle (strokeWidth>1) | A deliverable set that bundles multiple deliverables |
+| Edge | Solid arrow | An input/output to a process |
+| Feedback edge | Dashed arrow | A dependency that represents rework. It must always point from a deliverable to a process reachable in the reverse direction |
+
+Node labels are managed in the form `P<number>: description` or `D<number>: description`. `P`-type IDs correspond to the atomic process table, and `D`-type IDs correspond to the deliverable table and the composite deliverable table.
+
+The work volume, resources, and start conditions needed for schedule calculation are not stored on the PFD itself; they are managed in TSV tables.
+
+### 3. Atomic process table
+
+This is a TSV that defines the estimate values and execution conditions for each process. The fixed columns are the two columns `ID` and `Description`; the columns after them are project-specific headers (ExtraHeaders). Because the tool detects columns by matching header names, the column order is free. Japanese headers are also supported.
+
+A typical column layout:
+
+```tsv
+ID	Description	Est. Work Volume	Est. Rework Volume Ratio	Needed Resources	Start Condition	Milestone	Group
+```
+
+| Column name (English / Japanese) | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string  | Process ID (corresponds to `Pxx` in the PFD) | ✅ | Fixed column |
+| `Description` | string  | Process name | ✅ | Fixed column |
+| `Est. Work Volume` / `予想作業量` | float64 (≧ 0)  | Estimated work volume (abstract unit) | ✅ | `pfdplan` divides this by the resource consumption rate to compute the required duration |
+| `Est. Rework Volume Ratio` / `予想手戻り作業量割合` | float64 (0 ≦ ratio ≦ 1)  | A floating-point rework ratio (0–1) | ✅ | Rework volume = `initial work volume × ratio^(number of reworks)`, decaying exponentially |
+| `Needed Resources` / `必要資源` | string  | Allocation of needed resources | ✅ | See the format described below |
+| `Start Condition` / `開始条件` | string  | Start condition | ❌ | An empty cell means unconditional. See the syntax described below |
+| `Milestone` / `マイルストーン` | string  | The milestone it belongs to | ❌ | Used by `planmaster` |
+| `Group` / `グループ` | string  | The group it belongs to | ❌ | Used by `planmaster` |
+
+#### Needed Resources format
+
+Separate multiple resource allocations with a semicolon `;`. Each allocation is in the form `resourceID:work volume consumed per unit time`. The work volume consumed per unit time can also be a decimal.
+
+```
+CCWeb:1            # Allocate CCWeb with a work volume consumed per unit time of 1
+CCWeb:1;QA:0.5     # Allocate CCWeb and QA simultaneously (QA has a work volume consumed per unit time of 0.5)
+```
+
+Listing resource IDs separated by a comma `,` means that all of these resources are occupied.
+
+```
+CCWeb,CCiOS:1      # Allocate both CCWeb and CCiOS with a work volume consumed per unit time of 1
+```
+
+#### Start Condition syntax
+
+A process becomes executable if and only if all of the following are true:
+
+* All input deliverables of that process have been produced (feedback deliverables may or may not be present)
+* Among the input deliverables of that process, including feedback deliverables, there is one that has not been updated since the last update of the others
+* The evaluation result of that process's Start Condition expression is true
+
+```
+precondition = *SP *1(or_expr)
+or_expr      = and_expr *( "||" *SP and_expr)
+and_expr     = primary  *( "&&" *SP primary )
+primary      = "(" *SP precondition ")" *SP
+             / "\execBetween(" *SP node_id *SP "," *SP bound_expr *SP "," *SP bound_expr *SP ")" *SP
+             / "\complete(" *SP ("*" / node_id) *SP ")" *SP
+             / "\exec(" *SP node_id *SP ")" *SP
+             / "!" *SP precondition *SP
+bound_expr   = int / "\inf" / "\maxRev(" *SP node_id *SP ")" *SP
+node_id      = *(DIGIT / ALPHA / "_" / "-" / ".") 1*(DIGIT / ALPHA)
+```
+
+| Expression | Meaning |
+| --- | --- |
+| (empty) | True (`\true`) |
+| `\execBetween(D2, 0, 3)` | True only while the revision of deliverable D2 is in the half-open interval `[0, 3)` |
+| `\execBetween(D2, \maxRev(D2), \inf)` | True only while the revision of deliverable D2 is at least `\maxRev(D2)` |
+| `\complete(D2)` | Syntactic sugar for `\execBetween(D2, \maxRev(D2), \inf)` |
+| `\complete(*)` | False until all feedback-source deliverables reachable in the reverse direction are complete; true after they are complete |
+| `\exec(P3)` | False until process P3 becomes executable; true once it becomes executable |
+| `A && B` | True if both A and B are true; otherwise false |
+| `A \|\| B` | True if A or B is true; otherwise false |
+| `!A` | True if A is false; otherwise false |
+
+A `revision` of `0` means not yet produced, and `1` means the first production. The `\inf` used in `Start Condition` is a reserved word, and `\maxRev(Dx)` references `Max Revision` in the deliverable table.
+
+### 4. Deliverable table
+
+This is a TSV that defines the additional attributes of the deliverable nodes (`Dxx`) on the PFD. The fixed columns are `ID` and `Description`; the rest are ExtraHeaders.
+
+A typical column layout:
+
+```tsv
+ID	Description	Available Time	Max Revision
+```
+
+| Column name (English / Japanese) | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string  | Deliverable ID (corresponds to `Dxx` in the PFD) | ✅ | Fixed column |
+| `Description` | string  | Deliverable name | ✅ | Fixed column |
+| `Available Time` / `利用可能時刻` | float64  | The time at which the initial deliverable becomes available | ❌ | Effective only for deliverables with no upstream process. Empty/0 means "available from the start" |
+| `Max Revision` / `最大版` | int  | The termination condition of the feedback loop | ❌ | Set only for feedback-source deliverables (integer ≥ 1). The loop terminates when revision ≥ Max Revision. For non-feedback deliverables, leave it empty or `-` |
+
+### 5. Resource table
+
+This is the dictionary of resource IDs referenced by `Needed Resources` in the atomic process table.
+
+```tsv
+ID	Description
+```
+
+| Column name | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string | Resource ID (referenced by `Needed Resources`) | ✅ | Fixed column |
+| `Description` | string | Description of the resource (such as a person or team name) | ✅ | Fixed column |
+
+### 6. Composite deliverable table
+
+This is a TSV that defines deliverable sets that bundle multiple atomic deliverables.
+
+```tsv
+ID	Description	Deliverables
+```
+
+| Column name | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string | Composite deliverable ID | ✅ | Fixed column |
+| `Description` | string | Description of the composite deliverable | ✅ | Fixed column |
+| `Deliverables` | string | A comma-separated list of the contained atomic deliverable IDs (e.g., `D1, D2, D3`) | ✅ | Fixed column |
+
+### 7. Composite process table
+
+This is a TSV that defines higher-level processes that bundle multiple processes.
+
+```tsv
+ID	Description
+```
+
+| Column name | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string | Composite process ID | ✅ | Fixed column |
+| `Description` | string | Description of the composite process | ✅ | Fixed column |
+
+### 8. Milestone table
+
+This is a TSV that defines the ordering relationships between milestones. It is used when generating a master schedule with the `planmaster` command.
+
+```tsv
+ID	Description	Groups	Successors
+```
+
+| Column name | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string | Milestone ID | ✅ | Fixed column |
+| `Description` | string | Description of the milestone | ✅ | Fixed column |
+| `Groups` | string | A comma-separated list of the group IDs belonging to this milestone | ✅ | Fixed column |
+| `Successors` | string | A comma-separated list of successor milestone IDs | ✅ | Fixed column |
+
+### 9. Group table
+
+This is the dictionary of group IDs. It is referenced by the `Group` column of the atomic process table and the `Groups` column of the milestone table. It is used by the `planmaster` command.
+
+```tsv
+ID	Description
+```
+
+| Column name | Type | Meaning | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `ID` | string | Group ID | ✅ | Fixed column |
+| `Description` | string | Description of the group | ✅ | Fixed column |
+
+### 10. Critical path analysis result
+
+This is the output of the `criticalpath` command. It is not an input definition file.
+
+```tsv
+ATOMIC_PROCESS	TOTAL_FLOAT	MINIMUM_ELASTICITY
+```
+
+| Column name | Type | Meaning |
+| --- | --- | --- |
+| `ATOMIC_PROCESS` | string | Atomic process ID |
+| `TOTAL_FLOAT` | float64 (≧ 0) | Total float (a process with `0.00` is a candidate on the critical path) |
+| `MINIMUM_ELASTICITY` | float64 (≧ 0) or `"-"` | A metric for how much that process can stretch before it affects the overall deadline (`-` means no value) |
+
+### Creation steps
+
+These are the steps for creating a full set of PFD files for a new project.
+
+#### Step 1: Draw the PFD
+
+Create the PFD in draw.io.
+
+- Draw processes as ellipses and deliverables as rectangles
+- Draw atomic elements with thin lines (`strokeWidth=1`) and composite elements with thick lines (`strokeWidth>1`)
+- Make edges that represent rework dashed
+- Write the ID and description in the label, like `P1: Design`, `D1: Design document`
+
+If there are nodes whose IDs have not been assigned, you can auto-number them with `pfdrenum`:
+
+```console
+$ pfdrenum -inplace path/to/pfd.drawio
+```
+
+#### Step 2: Generate templates for the TSV tables
+
+Use the `pfdtable` command to generate a template for each table from the PFD:
+
+```console
+$ pfdtable -t cd -p path/to/pfd.drawio > cd.tsv
+$ pfdtable -t ap -p path/to/pfd.drawio > ap.tsv
+$ pfdtable -t ad -p path/to/pfd.drawio > ad.tsv
+$ pfdtable -t r  -p path/to/pfd.drawio > r.tsv
+```
+
+If you have updated the PFD, you can update the tables while preserving the existing ones with the `-existing` option:
+
+```console
+$ pfdtable -t ap -existing path/to/ap.tsv -p path/to/pfd.drawio > ap_new.tsv
+```
+
+#### Step 3: Fill in the TSV tables
+
+Add the necessary columns to the generated templates and fill in the values.
+
+- **Atomic process table** (`ap.tsv`): Add the `Est. Work Volume`, `Est. Rework Volume Ratio`, and `Needed Resources` columns, and fill in the estimate values for each process. Add the `Start Condition`, `Milestone`, and `Group` columns as needed
+- **Deliverable table** (`ad.tsv`): Add the `Available Time` and `Max Revision` columns, and fill in the attributes for the necessary deliverables
+- **Resource table** (`r.tsv`): Fill in the IDs and descriptions of the resources (teams/assignees) used in the project
+
+#### Step 4: Create the configuration JSON
+
+Create a configuration JSON that bundles the paths to each file:
+
+```json
+{
+  "pfd": "pfd.drawio",
+  "atomic_process_table": "ap.tsv",
+  "atomic_deliverable_table": "ad.tsv",
+  "resource_table": "r.tsv",
+  "composite_deliverable_table": "cd.tsv"
+}
+```
+
+#### Step 5: Run the static check
+
+Verify the consistency of the PFD and each table with `pfdlint`:
+
+```console
+$ pfdlint -f ./project.json
+```
+
+Fix the PFD and TSV until there are no more errors.
+
+#### Step 6: Generate the schedule
+
+Generate an execution plan with `pfdplan`:
+
+```console
+$ pfdplan -f ./project.json -poor -start 2025-06-01 -start-time 10:00 -duration 9 \
+    -not-biz-days <(holidays -locale ja)
+```
+
+#### Step 7: Analyze the critical path
+
+Identify bottlenecks with `criticalpath` (besides `-poor`, there are also `-best` and `-better`, but they usually never finish computing, so we recommend using `-poor`):
+
+```console
+$ criticalpath -f ./project.json -poor
+```
+
+
 pfdlint
 -------
 Detects problems in PFD notation.

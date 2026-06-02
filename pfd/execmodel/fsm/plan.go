@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 
+	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 )
 
@@ -59,6 +60,20 @@ func (c *Plan) States() []State {
 func (c *Plan) Leadtime() execmodel.Time {
 	states := c.States()
 	return states[len(states)-1].Time
+}
+
+// PrefixUntilProcessStart returns the portion of the plan's transition sequence
+// up to just before the transition in which the specified atomic process ap is first included in an allocation.
+// If ap is not included in the plan, it returns the entire plan.
+func PrefixUntilProcessStart(plan *Plan, ap pfd.AtomicProcessID) *Plan {
+	prefix := NewEmptyPlan(plan.InitialState)
+	for _, tr := range plan.Transitions {
+		if _, ok := tr.Allocation[ap]; ok {
+			break
+		}
+		prefix.Add(tr)
+	}
+	return prefix
 }
 
 func (p *Plan) Compare(b *Plan) int {

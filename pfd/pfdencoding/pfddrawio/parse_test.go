@@ -110,7 +110,7 @@ func TestParseValueHTML(t *testing.T) {
 		},
 		"embedded tags": {
 			Input:    "D1: Implement<br>ation",
-			Expected: "D1: Implement\nation",
+			Expected: "D1: Implementation",
 		},
 	}
 	for name, testCase := range testCases {

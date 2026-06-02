@@ -14,6 +14,7 @@ type PreconditionType string
 
 const (
 	PreconditionTypeFeedbackSourceCompleted                      PreconditionType = "FEEDBACK_SOURCE_COMPLETED"
+	PreconditionTypeExecBetween                                  PreconditionType = "EXEC_BETWEEN"
 	PreconditionTypeExecutable                                   PreconditionType = "EXECUTABLE"
 	PreconditionTypeOr                                           PreconditionType = "OR"
 	PreconditionTypeAnd                                          PreconditionType = "AND"
@@ -22,11 +23,103 @@ const (
 	PreconditionTypeAllBackwardReachableFeedbackSourcesCompleted PreconditionType = "ALL_BACKWARD_REACHABLE_FEEDBACK_SOURCES_COMPLETED"
 )
 
+type RevisionBoundType string
+
+const (
+	RevisionBoundTypeInt         RevisionBoundType = "INT"
+	RevisionBoundTypeInfinity    RevisionBoundType = "INFINITY"
+	RevisionBoundTypeMaxRevision RevisionBoundType = "MAX_REVISION"
+)
+
+type RevisionBound struct {
+	Type RevisionBoundType `json:"type"`
+
+	IntValue int `json:"int_value,omitempty"`
+
+	MaxRevisionDeliverable pfd.AtomicDeliverableID `json:"max_revision_deliverable,omitempty"`
+}
+
+func NewIntRevisionBound(v int) *RevisionBound {
+	return &RevisionBound{
+		Type:     RevisionBoundTypeInt,
+		IntValue: v,
+	}
+}
+
+func NewInfinityRevisionBound() *RevisionBound {
+	return &RevisionBound{
+		Type: RevisionBoundTypeInfinity,
+	}
+}
+
+func NewMaxRevisionBound(d pfd.AtomicDeliverableID) *RevisionBound {
+	return &RevisionBound{
+		Type:                   RevisionBoundTypeMaxRevision,
+		MaxRevisionDeliverable: d,
+	}
+}
+
+type RevisionBoundEvalResult struct {
+	Type RevisionBoundType `json:"type"`
+
+	Value int `json:"value"`
+
+	MaxRevisionDeliverable pfd.AtomicDeliverableID `json:"max_revision_deliverable,omitempty"`
+}
+
+func (b *RevisionBound) Eval(e *Env) *RevisionBoundEvalResult {
+	switch b.Type {
+	case RevisionBoundTypeInt:
+		return &RevisionBoundEvalResult{
+			Type:  b.Type,
+			Value: b.IntValue,
+		}
+	case RevisionBoundTypeInfinity:
+		return &RevisionBoundEvalResult{
+			Type: b.Type,
+		}
+	case RevisionBoundTypeMaxRevision:
+		maxRevision, ok := e.FeedbackSourceMaxRevision[b.MaxRevisionDeliverable]
+		if !ok {
+			panic(fmt.Sprintf("fsm.RevisionBound.Eval: missing max revision map: %q", b.MaxRevisionDeliverable))
+		}
+		return &RevisionBoundEvalResult{
+			Type:                   b.Type,
+			Value:                  maxRevision,
+			MaxRevisionDeliverable: b.MaxRevisionDeliverable,
+		}
+	default:
+		panic(fmt.Sprintf("fsm.RevisionBound.Eval: invalid type: %q", b.Type))
+	}
+}
+
+func (b *RevisionBound) Write(w io.Writer) error {
+	switch b.Type {
+	case RevisionBoundTypeInt:
+		_, _ = fmt.Fprint(w, b.IntValue)
+	case RevisionBoundTypeInfinity:
+		_, _ = io.WriteString(w, `\inf`)
+	case RevisionBoundTypeMaxRevision:
+		_, _ = io.WriteString(w, `\maxRev(`)
+		_, _ = io.WriteString(w, string(b.MaxRevisionDeliverable))
+		_, _ = io.WriteString(w, `)`)
+	default:
+		panic(fmt.Sprintf("fsm.RevisionBound.Write: invalid type: %q", b.Type))
+	}
+	return nil
+}
+
 type Precondition struct {
 	Type PreconditionType `json:"type"`
 
 	// FeedbackSource is true if the feedback loop has ended, false otherwise. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	FeedbackSource pfd.AtomicDeliverableID `json:"feedback_source,omitempty"`
+
+	ExecBetweenTarget pfd.AtomicDeliverableID `json:"exec_between_target,omitempty"`
+
+	ExecBetweenBegin *RevisionBound `json:"exec_between_begin,omitempty"`
+
+	ExecBetweenEnd *RevisionBound `json:"exec_between_end,omitempty"`
 
 	// Executable is true if the specified atomic process is executable. Behavior is undefined when Type is other than PreconditionTypeExecutable.
 	Executable pfd.AtomicProcessID `json:"executable,omitempty"`
@@ -45,9 +138,19 @@ type Precondition struct {
 }
 
 func NewFeedbackSourceCompletedPrecondition(feedbackSource pfd.AtomicDeliverableID) *Precondition {
+	return NewExecBetweenPrecondition(
+		feedbackSource,
+		NewMaxRevisionBound(feedbackSource),
+		NewInfinityRevisionBound(),
+	)
+}
+
+func NewExecBetweenPrecondition(target pfd.AtomicDeliverableID, begin, end *RevisionBound) *Precondition {
 	return &Precondition{
-		Type:           PreconditionTypeFeedbackSourceCompleted,
-		FeedbackSource: feedbackSource,
+		Type:              PreconditionTypeExecBetween,
+		ExecBetweenTarget: target,
+		ExecBetweenBegin:  begin,
+		ExecBetweenEnd:    end,
 	}
 }
 
@@ -99,6 +202,12 @@ type PreconditionEvalResult struct {
 	// FeedbackSource is a feedback edge whose completion is specified in the precondition but is not yet completed. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	FeedbackSource pfd.AtomicDeliverableID `json:"feedback_source,omitempty"`
 
+	ExecBetweenTarget pfd.AtomicDeliverableID `json:"exec_between_target,omitempty"`
+
+	ExecBetweenBegin *RevisionBoundEvalResult `json:"exec_between_begin,omitempty"`
+
+	ExecBetweenEnd *RevisionBoundEvalResult `json:"exec_between_end,omitempty"`
+
 	// Executable is true if the specified atomic process is executable, false otherwise. Behavior is undefined when Type is other than PreconditionTypeExecutable.
 	Executable *AllocatabilityInfo `json:"executable,omitempty"`
 
@@ -131,25 +240,32 @@ func (r *PreconditionEvalResult) Write(w io.Writer) error {
 func (p *Precondition) Eval(e *Env, remainedVolumeMap map[pfd.AtomicProcessID]Volume, revisionMap map[pfd.AtomicDeliverableID]int, allocationShouldContinue Allocation, updatedDeliverablesNotHandled map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]) *PreconditionEvalResult {
 	switch p.Type {
 	case PreconditionTypeFeedbackSourceCompleted:
-		if !e.PFD.FeedbackSourceDeliverables().Contains(pfd.AtomicDeliverableID.Compare, p.FeedbackSource) {
-			panic(fmt.Sprintf("fsm.Precondition.Eval: missing feedback source deliverable: %q", p.FeedbackSource))
+		return NewFeedbackSourceCompletedPrecondition(p.FeedbackSource).Eval(e, remainedVolumeMap, revisionMap, allocationShouldContinue, updatedDeliverablesNotHandled)
+
+	case PreconditionTypeExecBetween:
+		if !e.PFD.FeedbackSourceDeliverables().Contains(pfd.AtomicDeliverableID.Compare, p.ExecBetweenTarget) {
+			panic(fmt.Sprintf("fsm.Precondition.Eval: missing feedback source deliverable: %q", p.ExecBetweenTarget))
 		}
 
-		revision, ok := revisionMap[p.FeedbackSource]
+		revision, ok := revisionMap[p.ExecBetweenTarget]
 		if !ok {
-			panic(fmt.Sprintf("fsm.Precondition.Eval: missing revision map: %q", p.FeedbackSource))
+			panic(fmt.Sprintf("fsm.Precondition.Eval: missing revision map: %q", p.ExecBetweenTarget))
 		}
 
-		maxRevision, ok := e.FeedbackSourceMaxRevision[p.FeedbackSource]
-		if !ok {
-			panic(fmt.Sprintf("fsm.Precondition.Eval: missing max revision map: %q", p.FeedbackSource))
+		begin := p.ExecBetweenBegin.Eval(e)
+		end := p.ExecBetweenEnd.Eval(e)
+		result := begin.Value <= revision
+		if end.Type != RevisionBoundTypeInfinity {
+			result = result && revision < end.Value
 		}
+
 		return &PreconditionEvalResult{
-			Type:           PreconditionTypeFeedbackSourceCompleted,
-			Result:         revision >= maxRevision,
-			FeedbackSource: p.FeedbackSource,
-			Revision:       revision,
-			MaxRevision:    maxRevision,
+			Type:              PreconditionTypeExecBetween,
+			Result:            result,
+			ExecBetweenTarget: p.ExecBetweenTarget,
+			ExecBetweenBegin:  begin,
+			ExecBetweenEnd:    end,
+			Revision:          revision,
 		}
 
 	case PreconditionTypeNot:
@@ -252,34 +368,40 @@ func (p *Precondition) Compile(vp *pfd.ValidPFD, logger *slog.Logger) *Precondit
 func (p *Precondition) Write(w io.Writer) error {
 	switch p.Type {
 	case PreconditionTypeFeedbackSourceCompleted:
-		io.WriteString(w, `\complete(`)
-		io.WriteString(w, string(p.FeedbackSource))
-		io.WriteString(w, `)`)
+		return NewFeedbackSourceCompletedPrecondition(p.FeedbackSource).Write(w)
+	case PreconditionTypeExecBetween:
+		_, _ = io.WriteString(w, `\execBetween(`)
+		_, _ = io.WriteString(w, string(p.ExecBetweenTarget))
+		_, _ = io.WriteString(w, `, `)
+		_ = p.ExecBetweenBegin.Write(w)
+		_, _ = io.WriteString(w, `, `)
+		_ = p.ExecBetweenEnd.Write(w)
+		_, _ = io.WriteString(w, `)`)
 	case PreconditionTypeAllBackwardReachableFeedbackSourcesCompleted:
-		io.WriteString(w, `\complete(*)`)
+		_, _ = io.WriteString(w, `\complete(*)`)
 	case PreconditionTypeExecutable:
-		io.WriteString(w, `\exec(`)
-		io.WriteString(w, string(p.Executable))
-		io.WriteString(w, `)`)
+		_, _ = io.WriteString(w, `\exec(`)
+		_, _ = io.WriteString(w, string(p.Executable))
+		_, _ = io.WriteString(w, `)`)
 	case PreconditionTypeOr:
 		for i, precondition := range p.Or {
 			if i > 0 {
-				io.WriteString(w, ` || `)
+				_, _ = io.WriteString(w, ` || `)
 			}
-			precondition.Write(w)
+			_ = precondition.Write(w)
 		}
 	case PreconditionTypeAnd:
 		for i, precondition := range p.And {
 			if i > 0 {
-				io.WriteString(w, ` && `)
+				_, _ = io.WriteString(w, ` && `)
 			}
-			precondition.Write(w)
+			_ = precondition.Write(w)
 		}
 	case PreconditionTypeNot:
-		io.WriteString(w, `!`)
-		p.Not.Write(w)
+		_, _ = io.WriteString(w, `!`)
+		_ = p.Not.Write(w)
 	case PreconditionTypeTrue:
-		io.WriteString(w, `\true`)
+		_, _ = io.WriteString(w, `\true`)
 	default:
 		panic(fmt.Sprintf("fsm.Precondition.Write: invalid type: %q", p.Type))
 	}
@@ -289,6 +411,8 @@ func (p *Precondition) Write(w io.Writer) error {
 func (p *Precondition) Traverse(f func(p *Precondition)) {
 	switch p.Type {
 	case PreconditionTypeFeedbackSourceCompleted:
+		f(p)
+	case PreconditionTypeExecBetween:
 		f(p)
 	case PreconditionTypeAllBackwardReachableFeedbackSourcesCompleted:
 		f(p)

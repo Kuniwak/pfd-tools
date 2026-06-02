@@ -17,8 +17,8 @@ func Parse(s string) (Locale, error) {
 	switch s {
 	case LocaleJa.String():
 		return LocaleJa, nil
-	case LocaleEn.String(), "":
+	case LocaleEn.String():
 		return LocaleEn, nil
 	}
-	return LocaleEn, fmt.Errorf("locale.ParseLocale: unknown locale: %q", s)
+	return LocaleJa, fmt.Errorf("locale.ParseLocale: unknown locale: %q", s)
 }

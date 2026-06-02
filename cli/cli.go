@@ -72,3 +72,14 @@ func NewEnvFunc(env map[string]string) EnvFunc {
 		return env[name]
 	}
 }
+
+// OverrideIfSet overwrites *dst with the first non-empty value.
+// Intended for CLI flag override: short flag > long flag > existing value.
+func OverrideIfSet(dst *string, values ...string) {
+	for _, v := range values {
+		if v != "" {
+			*dst = v
+			return
+		}
+	}
+}

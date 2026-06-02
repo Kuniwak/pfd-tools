@@ -3,6 +3,7 @@ package fsmtable
 import (
 	"cmp"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Kuniwak/pfd-tools/parser"
@@ -75,11 +76,14 @@ func PreconditionFuncByTableFunc(table *pfd.AtomicProcessTable, matchFunc pfd.Co
 //		and_expr     = primary  *( "&&" *SP primary )
 //
 //		primary      = "(" *SP precondition ")" *SP
+//		             / "\execBetween(" *SP node_id *SP "," *SP bound_expr *SP "," *SP bound_expr *SP ")" *SP
 //		             / "\complete(" *SP ("*" / node_id) *SP ")" *SP
 //		             / "\exec(" *SP node_id *SP ")" *SP
 //		             / "!" *SP precondition *SP
 //
 //		node_id      = *(DIGIT / ALPHA / "_" / "-" / ".") 1*(DIGIT / ALPHA)
+//		bound_expr   = int / "\inf" / "\maxRev(" *SP node_id *SP ")" *SP
+//		int          = ["-"] 1*DIGIT
 //	 	SP           = " "
 func ParsePrecondition(s string, ap pfd.AtomicProcessID) (*fsm.Precondition, error) {
 	rs := []rune(s)
@@ -108,9 +112,15 @@ var (
 	ParenthesesCloseKeyword = []rune{')'}
 	ArrowKeyword            = []rune{'-', '>'}
 	NotKeyword              = []rune{'!'}
+	CommaKeyword            = []rune{','}
 	CompleteBeginKeyword    = []rune(`\complete(`)
 	CompleteEndKeyword      = []rune(`)`)
 	AsteriskKeyword         = []rune{'*'}
+	ExecBetweenBeginKeyword = []rune(`\execBetween(`)
+	ExecBetweenEndKeyword   = []rune(`)`)
+	InfinityKeyword         = []rune(`\inf`)
+	MaxRevisionBeginKeyword = []rune(`\maxRev(`)
+	MaxRevisionEndKeyword   = []rune(`)`)
 	ExecutableBeginKeyword  = []rune(`\exec(`)
 	ExecutableEndKeyword    = []rune(`)`)
 	TrueKeyword             = []rune(`\true`)
@@ -190,6 +200,11 @@ func parsePrimary(s []rune, index int, ap pfd.AtomicProcessID) (*fsm.Preconditio
 		return p, newIndex
 	}
 
+	p, newIndex = parseExecBetween(s, newIndex)
+	if p != nil {
+		return p, newIndex
+	}
+
 	p, newIndex = parseComplete(s, newIndex, ap)
 	if p != nil {
 		return p, newIndex
@@ -211,6 +226,48 @@ func parsePrimary(s []rune, index int, ap pfd.AtomicProcessID) (*fsm.Preconditio
 	}
 
 	return nil, index
+}
+
+func parseExecBetween(s []rune, index int) (*fsm.Precondition, int) {
+	ok, newIndex := parser.ExpectKeyword(ExecBetweenBeginKeyword, s, index)
+	if !ok {
+		return nil, index
+	}
+	newIndex = parser.SkipRune(Whitespaces, s, newIndex)
+
+	ok, id, newIndex := parseNodeID(s, newIndex)
+	if !ok {
+		return nil, index
+	}
+
+	ok, newIndex = parser.ExpectKeyword(CommaKeyword, s, newIndex)
+	if !ok {
+		return nil, index
+	}
+	newIndex = parser.SkipRune(Whitespaces, s, newIndex)
+
+	begin, newIndex := parseRevisionBound(s, newIndex)
+	if begin == nil {
+		return nil, index
+	}
+
+	ok, newIndex = parser.ExpectKeyword(CommaKeyword, s, newIndex)
+	if !ok {
+		return nil, index
+	}
+	newIndex = parser.SkipRune(Whitespaces, s, newIndex)
+
+	end, newIndex := parseRevisionBound(s, newIndex)
+	if end == nil {
+		return nil, index
+	}
+
+	ok, newIndex = parser.ExpectKeyword(ExecBetweenEndKeyword, s, newIndex)
+	if !ok {
+		return nil, index
+	}
+
+	return fsm.NewExecBetweenPrecondition(pfd.AtomicDeliverableID(id), begin, end), parser.SkipRune(Whitespaces, s, newIndex)
 }
 
 func parseComplete(s []rune, index int, ap pfd.AtomicProcessID) (*fsm.Precondition, int) {
@@ -245,6 +302,70 @@ func parseComplete(s []rune, index int, ap pfd.AtomicProcessID) (*fsm.Preconditi
 	}
 
 	return fsm.NewFeedbackSourceCompletedPrecondition(pfd.AtomicDeliverableID(id)), parser.SkipRune(Whitespaces, s, newIndex)
+}
+
+func parseRevisionBound(s []rune, index int) (*fsm.RevisionBound, int) {
+	b, newIndex := parseInfinityRevisionBound(s, index)
+	if b != nil {
+		return b, newIndex
+	}
+
+	b, newIndex = parseMaxRevisionBound(s, index)
+	if b != nil {
+		return b, newIndex
+	}
+
+	return parseIntRevisionBound(s, index)
+}
+
+func parseInfinityRevisionBound(s []rune, index int) (*fsm.RevisionBound, int) {
+	ok, newIndex := parser.ExpectKeyword(InfinityKeyword, s, index)
+	if !ok {
+		return nil, index
+	}
+	return fsm.NewInfinityRevisionBound(), parser.SkipRune(Whitespaces, s, newIndex)
+}
+
+func parseMaxRevisionBound(s []rune, index int) (*fsm.RevisionBound, int) {
+	ok, newIndex := parser.ExpectKeyword(MaxRevisionBeginKeyword, s, index)
+	if !ok {
+		return nil, index
+	}
+	newIndex = parser.SkipRune(Whitespaces, s, newIndex)
+
+	ok, id, newIndex := parseNodeID(s, newIndex)
+	if !ok {
+		return nil, index
+	}
+
+	ok, newIndex = parser.ExpectKeyword(MaxRevisionEndKeyword, s, newIndex)
+	if !ok {
+		return nil, index
+	}
+	return fsm.NewMaxRevisionBound(pfd.AtomicDeliverableID(id)), parser.SkipRune(Whitespaces, s, newIndex)
+}
+
+func parseIntRevisionBound(s []rune, index int) (*fsm.RevisionBound, int) {
+	newIndex := index
+	if newIndex < len(s) && s[newIndex] == '-' {
+		newIndex++
+	}
+
+	runes, newIndex := parser.AdvanceUntil(parser.IsDigit, s, newIndex)
+	if len(runes) == 0 {
+		return nil, index
+	}
+
+	text := string(runes)
+	if index < len(s) && s[index] == '-' {
+		text = "-" + text
+	}
+
+	value, err := strconv.Atoi(text)
+	if err != nil {
+		return nil, index
+	}
+	return fsm.NewIntRevisionBound(value), parser.SkipRune(Whitespaces, s, newIndex)
 }
 
 func parseExecutable(s []rune, index int) (*fsm.Precondition, int) {

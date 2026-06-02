@@ -1,0 +1,10 @@
+{
+	"pfd": "pfd.drawio",
+	"atomic_process_table": "atomic_proc.tsv",
+	"atomic_deliverable_table": "deliv.tsv",
+	"composite_process_table": "comp_proc.tsv",
+	"composite_deliverable_table": "comp_deliv.tsv",
+	"resource_table": "resource.tsv",
+	"milestone_table": "milestone.tsv",
+	"group_table": "group.tsv"
+}

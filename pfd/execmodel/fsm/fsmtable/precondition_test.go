@@ -44,15 +44,37 @@ func TestParsePrecondition(t *testing.T) {
 		"complete without spaces": {
 			Input: `\complete(D123)`,
 			Want: &fsm.Precondition{
-				Type:           fsm.PreconditionTypeFeedbackSourceCompleted,
-				FeedbackSource: pfd.AtomicDeliverableID("D123"),
+				Type:                fsm.PreconditionTypeExecBetween,
+				ExecBetweenTarget: pfd.AtomicDeliverableID("D123"),
+				ExecBetweenBegin:  fsm.NewMaxRevisionBound("D123"),
+				ExecBetweenEnd:    fsm.NewInfinityRevisionBound(),
 			},
 		},
 		"complete with spaces": {
 			Input: `\complete( D123 ) `,
 			Want: &fsm.Precondition{
-				Type:           fsm.PreconditionTypeFeedbackSourceCompleted,
-				FeedbackSource: pfd.AtomicDeliverableID("D123"),
+				Type:                fsm.PreconditionTypeExecBetween,
+				ExecBetweenTarget: pfd.AtomicDeliverableID("D123"),
+				ExecBetweenBegin:  fsm.NewMaxRevisionBound("D123"),
+				ExecBetweenEnd:    fsm.NewInfinityRevisionBound(),
+			},
+		},
+		"exec between with integer bounds": {
+			Input: `\execBetween(D123, 0, 3)`,
+			Want: &fsm.Precondition{
+				Type:                fsm.PreconditionTypeExecBetween,
+				ExecBetweenTarget: pfd.AtomicDeliverableID("D123"),
+				ExecBetweenBegin:  fsm.NewIntRevisionBound(0),
+				ExecBetweenEnd:    fsm.NewIntRevisionBound(3),
+			},
+		},
+		"exec between with symbolic bounds": {
+			Input: `\execBetween( D123, \maxRev(D123), \inf ) `,
+			Want: &fsm.Precondition{
+				Type:                fsm.PreconditionTypeExecBetween,
+				ExecBetweenTarget: pfd.AtomicDeliverableID("D123"),
+				ExecBetweenBegin:  fsm.NewMaxRevisionBound("D123"),
+				ExecBetweenEnd:    fsm.NewInfinityRevisionBound(),
 			},
 		},
 		"complete asterisk without spaces": {

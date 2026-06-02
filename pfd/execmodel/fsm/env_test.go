@@ -176,7 +176,7 @@ func TestAllocatability(t *testing.T) {
 		logger := slog.New(slogtest.NewTestHandler(t))
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
 			// [D1] -> (P1) -> [D2]
-			// P1: executable (continuing execution)
+			// P1: Executable (continuing execution)
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
 				&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
@@ -494,11 +494,19 @@ func TestAllocatability(t *testing.T) {
 			"P1": NewAllocatabilityOKStartable(),
 			"P2": NewAllocatabilityNGNoDeliverableUpdates(sets.New(pfd.AtomicDeliverableID.Compare, "D2")),
 			"P3": NewAllocatabilityNGPreconditionNotMet(`{
-  "type": "FEEDBACK_SOURCE_COMPLETED",
+  "type": "EXEC_BETWEEN",
   "result": false,
-  "feedback_source": "D4",
-  "revision": 1,
-  "max_revision": 3
+  "exec_between_target": "D4",
+  "exec_between_begin": {
+    "type": "MAX_REVISION",
+    "value": 3,
+    "max_revision_deliverable": "D4"
+  },
+  "exec_between_end": {
+    "type": "INFINITY",
+    "value": 0
+  },
+  "revision": 1
 }
 `),
 		}

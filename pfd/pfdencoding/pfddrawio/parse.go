@@ -285,7 +285,7 @@ func ParseVertexValue(s string) (pfd.NodeID, string, error) {
 	parts := strings.SplitN(s, ":", 2)
 	switch len(parts) {
 	case 1:
-		// NOTE: If there are unnumbered IDs, use the description as the ID.
+		// NOTE: If there is an unnumbered ID, use the description as the ID.
 		return pfd.NodeID(strings.TrimSpace(parts[0])), "", nil
 	case 2:
 		return pfd.NodeID(strings.TrimSpace(parts[0])), strings.TrimSpace(parts[1]), nil
@@ -297,10 +297,6 @@ func ParseVertexValue(s string) (pfd.NodeID, string, error) {
 func TextContent(node *html.Node, sb *strings.Builder) {
 	if node.Type == html.TextNode {
 		sb.WriteString(node.Data)
-	}
-
-	if node.Data == "br" {
-		sb.WriteString("\n")
 	}
 
 	if node.FirstChild != nil {

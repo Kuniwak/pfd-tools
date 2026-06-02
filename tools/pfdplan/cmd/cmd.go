@@ -78,6 +78,10 @@ func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 			ext = ".tsv"
 		case tools.PlanOutputFormatPlanJSON, tools.PlanOutputFormatTimelineJSON:
 			ext = ".json"
+		case tools.PlanOutputFormatMermaid:
+			ext = ".mmd"
+		case tools.PlanOutputFormatPlantUML:
+			ext = ".puml"
 		default:
 			panic(fmt.Sprintf("cmd.MainCommandByOptions: invalid output format: %q", options.OutputFormat))
 		}

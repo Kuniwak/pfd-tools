@@ -17,6 +17,10 @@ func TestPrecondition_Eval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pfd.NewSafePFDByUnsafePFD: %v", err)
 	}
+	smallestLoop, err := pfd.NewSafePFDByUnsafePFD(pfd.PresetSmallestLoop)
+	if err != nil {
+		t.Fatalf("pfd.NewSafePFDByUnsafePFD: %v", err)
+	}
 
 	neededResourceSetsFunc := NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
 		"P1": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1}),
@@ -206,6 +210,64 @@ func TestPrecondition_Eval(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		"exec between": {
+			Env: NewEnv(
+				smallestLoop,
+				sets.New(ResourceID.Compare, "R1"),
+				NewAvailableAllocationsFunc(NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
+					"P1": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1}),
+				})),
+				ConstInitialVolumeFunc(1),
+				ExponentialReworkVolumeFunc(0.5, ConstInitialVolumeFunc(1)),
+				ConstMaxRevisionMap(3, smallestLoop.FeedbackSourceDeliverables()),
+				map[pfd.AtomicProcessID]*Precondition{
+					"P1": NewExecBetweenPrecondition(
+						"D2",
+						NewIntRevisionBound(1),
+						NewMaxRevisionBound("D2"),
+					),
+				},
+				NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
+					"P1": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1}),
+				}),
+				ConstDeliverableAvailableTimeFunc(0),
+				slog.New(slogtest.NewTestHandler(t)),
+			),
+			State: NewState(
+				0,
+				map[pfd.AtomicDeliverableID]int{
+					"D1": 1,
+					"D2": 2,
+				},
+				map[pfd.AtomicProcessID]Volume{
+					"P1": 1,
+				},
+				map[pfd.AtomicProcessID]int{
+					"P1": 1,
+				},
+				Allocation{},
+				map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
+					"P1": sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+				},
+			),
+			Want: map[pfd.AtomicProcessID]*PreconditionEvalResult{
+				"P1": {
+					Type:              PreconditionTypeExecBetween,
+					Result:            true,
+					ExecBetweenTarget: "D2",
+					ExecBetweenBegin: &RevisionBoundEvalResult{
+						Type:  RevisionBoundTypeInt,
+						Value: 1,
+					},
+					ExecBetweenEnd: &RevisionBoundEvalResult{
+						Type:                   RevisionBoundTypeMaxRevision,
+						Value:                  3,
+						MaxRevisionDeliverable: "D2",
+					},
+					Revision: 2,
 				},
 			},
 		},

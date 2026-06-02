@@ -49,7 +49,7 @@ func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}
 
-	criticalPathInfoFunc := fsm.NewCriticalPathInfoFunc(options.SearchFunc)
+	criticalPathInfoFunc := fsm.NewCriticalPathInfoFunc(options.SearchWithPrefixFunc)
 
 	criticalPathInfo, err := criticalPathInfoFunc(env)
 	if err != nil {

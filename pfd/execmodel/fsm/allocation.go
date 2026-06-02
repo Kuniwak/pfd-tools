@@ -227,6 +227,12 @@ func NewThresholdAvailableAllocationsFunc(threshold int, neededResourceSetsFunc 
 // AvailableAllocations enumerates and returns possible resource allocations in the given state.
 func NewAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSetsFunc) AvailableAllocationsFunc {
 	return func(state State, newlyAllocatables *sets.Set[pfd.AtomicProcessID]) *sets.Set[Allocation] {
+		// Build the set of resources occupied by continuing processes
+		continuingResources := sets.New[ResourceID](ResourceID.Compare)
+		for _, elem := range state.AllocationShouldContinue {
+			continuingResources.Union(ResourceID.Compare, elem.Resources)
+		}
+
 		// Assign unique IDs to each m[ap][i]
 		type key struct {
 			AtomicProcess pfd.AtomicProcessID
@@ -236,6 +242,10 @@ func NewAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSetsFunc) 
 		var allSets []AllocationElement
 		for _, ap := range newlyAllocatables.Iter() {
 			for i, s := range neededResourceSetsFunc(ap).Iter() {
+				// Skip candidates that conflict with resources of continuing processes
+				if !s.Resources.IsDisjointWith(ResourceID.Compare, continuingResources) {
+					continue
+				}
 				idOf[key{AtomicProcess: ap, Index: i}] = len(allSets)
 				allSets = append(allSets, s)
 			}
@@ -280,7 +290,11 @@ func NewAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSetsFunc) 
 
 			// Case where an element is added
 			for idx, nr := range rs.Iter() {
-				id := idOf[key{p, idx}]
+				id, filtered := idOf[key{p, idx}]
+				if !filtered {
+					// Already filtered out because it conflicts with continuing resources
+					continue
+				}
 				ok := true
 				for _, cid := range chosenIDs {
 					if !disjoint[id][cid] {
@@ -305,6 +319,12 @@ func NewAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSetsFunc) 
 
 func NewMaximalAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSetsFunc) AvailableAllocationsFunc {
 	return func(state State, newlyAllocatables *sets.Set[pfd.AtomicProcessID]) *sets.Set[Allocation] {
+		// Build the set of resources occupied by continuing processes
+		continuingResources := sets.New[ResourceID](ResourceID.Compare)
+		for _, elem := range state.AllocationShouldContinue {
+			continuingResources.Union(ResourceID.Compare, elem.Resources)
+		}
+
 		type allocOption struct {
 			idx            int
 			ap             pfd.AtomicProcessID
@@ -319,6 +339,10 @@ func NewMaximalAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSet
 				if entry.ConsumedVolume <= 0 {
 					panic(fmt.Sprintf("fsm.NewMaximalAvailableAllocationsFunc: consumed volume is zero: %v", entry))
 				}
+				// Skip candidates that conflict with resources of continuing processes
+				if !entry.Resources.IsDisjointWith(ResourceID.Compare, continuingResources) {
+					continue
+				}
 				options = append(options, allocOption{
 					idx:            len(options),
 					ap:             ap,
@@ -329,7 +353,11 @@ func NewMaximalAvailableAllocationsFunc(neededResourceSetsFunc NeededResourceSet
 		}
 
 		if len(options) == 0 {
-			// Nothing can be allocated due to resource constraints
+			// No newly allocatable candidates
+			if len(state.AllocationShouldContinue) > 0 {
+				// Return only the continuing allocation
+				return sets.New(CompareAllocationByTotalConsumedVolume, maps.Clone(state.AllocationShouldContinue))
+			}
 			return nil
 		}
 

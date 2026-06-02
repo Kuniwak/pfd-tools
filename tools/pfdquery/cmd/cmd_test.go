@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Kuniwak/pfd-tools/cli"
+	"github.com/Kuniwak/pfd-tools/pfd/pfdencoding/pfddrawiopng/pngtest"
 )
 
 func TestMainCommandByArgs(t *testing.T) {
@@ -28,6 +29,15 @@ func TestMainCommandByArgs(t *testing.T) {
 	t.Run("composite process", func(t *testing.T) {
 		spy := cli.SpyProcInout()
 		exitStatus := MainCommandByArgs([]string{"-cp", "testdata/loop/comp_proc.tsv", "P0"}, spy.NewProcInout())
+		if exitStatus != 0 {
+			t.Log(spy.Stderr.String())
+			t.Log(spy.Stdout.String())
+			t.Errorf("exitStatus = %d, want 0", exitStatus)
+		}
+	})
+	t.Run("composite process via config", func(t *testing.T) {
+		spy := cli.SpyProcInout()
+		exitStatus := MainCommandByArgs([]string{"-f", "testdata/loop/config.json", "P0"}, spy.NewProcInout())
 		if exitStatus != 0 {
 			t.Log(spy.Stderr.String())
 			t.Log(spy.Stdout.String())
@@ -82,6 +92,16 @@ func TestMainCommandByArgs(t *testing.T) {
 	t.Run("group table", func(t *testing.T) {
 		spy := cli.SpyProcInout()
 		exitStatus := MainCommandByArgs([]string{"-g", "testdata/loop/group.tsv", "G1"}, spy.NewProcInout())
+		if exitStatus != 0 {
+			t.Log(spy.Stderr.String())
+			t.Log(spy.Stdout.String())
+			t.Errorf("exitStatus = %d, want 0", exitStatus)
+		}
+	})
+	t.Run("png input", func(t *testing.T) {
+		pngPath := pngtest.WriteTempPNG(t, "testdata/loop/pfd.drawio")
+		spy := cli.SpyProcInout()
+		exitStatus := MainCommandByArgs([]string{"-p", pngPath, "-ap", "testdata/loop/atomic_proc.tsv", "P1"}, spy.NewProcInout())
 		if exitStatus != 0 {
 			t.Log(spy.Stderr.String())
 			t.Log(spy.Stdout.String())

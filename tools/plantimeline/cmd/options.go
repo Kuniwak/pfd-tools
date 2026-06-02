@@ -73,7 +73,7 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: plan path is required")
 	}
 
-	planReporter, outputFormat, err := tools.ValidatePlanOutputFormat(&planOutputFormatRawOptions, slog.New(slograw.NewHandler(inout.Stderr, commonOptions.LogLevel)))
+	planReporter, outputFormat, err := tools.ValidatePlanOutputFormat(&planOutputFormatRawOptions, flags, slog.New(slograw.NewHandler(inout.Stderr, commonOptions.LogLevel)))
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
@@ -83,7 +83,12 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	fsmOptions, err := tools.ValidateFSMOptionsOrConfig(&fsmRawOptions, &configShortPath, &configLongPath, cwd)
+	mergedOptions, basePath, err := tools.ReadFSMRawOptions(&configShortPath, &configLongPath, fsmRawOptions, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
+	fsmOptions, err := tools.ValidateAllFSMOptions(&mergedOptions, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}

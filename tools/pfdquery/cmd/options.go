@@ -100,9 +100,6 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	var fsmRawOptions tools.FSMRawOptions
 	tools.DeclareFSMOptions(flags, &fsmRawOptions, &configShortPath, &configLongPath)
 
-	var compositeProcessTableShortPath, compositeProcessTableLongPath string
-	tools.DeclareCompositeProcessTableOptions(flags, &compositeProcessTableShortPath, &compositeProcessTableLongPath)
-
 	var backwardReachable bool
 	flags.BoolVar(&backwardReachable, "backward-reachable", false, "backward reachable")
 
@@ -133,115 +130,75 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	var p *pfd.PFD
-	var atomicProcessTable *pfd.AtomicProcessTable
-	var atomicDeliverableTable *pfd.AtomicDeliverableTable
-	var compositeProcessTable *pfd.CompositeProcessTable
-	var compositeDeliverableTable *pfd.CompositeDeliverableTable
-	var resourceTable *fsmtable.ResourceTable
-	var milestoneTable *fsmtable.MilestoneTable
-	var groupTable *fsmtable.GroupTable
+	mergedOptions, basePath, err := tools.ReadFSMRawOptions(&configShortPath, &configLongPath, fsmRawOptions, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
 
-	if configShortPath != "" || configLongPath != "" {
-		var fsmOptions *tools.FSMOptions
-		fsmOptions, err = tools.ValidateFSMOptionsJSON(&configShortPath, &configLongPath, fsmRawOptions)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
+	fsmOptions, err := tools.ValidatePossibleFSMOptions(&mergedOptions, basePath)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
+	var atomicProcessTable *pfd.AtomicProcessTable
+	if fsmOptions.AtomicProcessTableReader != nil {
 		atomicProcessTable, err = pfdtsv.ParseAtomicProcessTable(fsmOptions.AtomicProcessTableReader)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}
+	}
+
+	var atomicDeliverableTable *pfd.AtomicDeliverableTable
+	if fsmOptions.AtomicDeliverableTableReader != nil {
 		atomicDeliverableTable, err = pfdtsv.ParseAtomicDeliverableTable(fsmOptions.AtomicDeliverableTableReader)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}
+	}
+
+	var compositeProcessTable *pfd.CompositeProcessTable
+	if fsmOptions.CompositeProcessTableReader != nil {
+		compositeProcessTable, err = pfdtsv.ParseCompositeProcessTable(fsmOptions.CompositeProcessTableReader)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
+	}
+
+	var compositeDeliverableTable *pfd.CompositeDeliverableTable
+	if fsmOptions.CompositeDeliverableTableReader != nil {
 		compositeDeliverableTable, err = pfdtsv.ParseCompositeDeliverableTable(fsmOptions.CompositeDeliverableTableReader)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}
-		resourceTable, err = fsmtsv.ParseResourceTable(fsmOptions.ResourceTableReader)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
+	}
+
+	var p *pfd.PFD
+	if fsmOptions.PFDReader != nil && compositeDeliverableTable != nil {
 		p, err = pfdfmt.Parse("", fsmOptions.PFDReader, &pfdfmt.ParseOptions{CompositeDeliverableTable: compositeDeliverableTable}, commonOptions.Logger)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}
-	} else {
-		if fsmRawOptions.ShortAtomicProcessTablePath != "" || fsmRawOptions.AtomicProcessTablePath != "" {
-			atomicProcessTableReader, _, err := tools.ValidateAtomicProcessTableOptions(&fsmRawOptions.ShortAtomicProcessTablePath, &fsmRawOptions.AtomicProcessTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			atomicProcessTable, err = pfdtsv.ParseAtomicProcessTable(atomicProcessTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		if fsmRawOptions.ShortAtomicDeliverableTablePath != "" || fsmRawOptions.AtomicDeliverableTablePath != "" {
-			atomicDeliverableTableReader, _, err := tools.ValidateAtomicDeliverableTableOptions(&fsmRawOptions.ShortAtomicDeliverableTablePath, &fsmRawOptions.AtomicDeliverableTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			atomicDeliverableTable, err = pfdtsv.ParseAtomicDeliverableTable(atomicDeliverableTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		if fsmRawOptions.ShortCompositeDeliverableTablePath != "" || fsmRawOptions.CompositeDeliverableTablePath != "" {
-			compositeDeliverableTableReader, _, err := tools.ValidateCompositeDeliverableTableOptions(&fsmRawOptions.ShortCompositeDeliverableTablePath, &fsmRawOptions.CompositeDeliverableTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			compositeDeliverableTable, err = pfdtsv.ParseCompositeDeliverableTable(compositeDeliverableTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		if fsmRawOptions.ShortResourceTablePath != "" || fsmRawOptions.ResourceTablePath != "" {
-			resourceTableReader, _, err := tools.ValidateResourceTableOptions(&fsmRawOptions.ShortResourceTablePath, &fsmRawOptions.ResourceTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			resourceTable, err = fsmtsv.ParseResourceTable(resourceTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		if fsmRawOptions.ShortMilestoneTablePath != "" || fsmRawOptions.MilestoneTablePath != "" {
-			milestoneTableReader, _, err := tools.ValidateMilestoneTableOptions(&fsmRawOptions.ShortMilestoneTablePath, &fsmRawOptions.MilestoneTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			milestoneTable, err = fsmtsv.ParseMilestoneTable(milestoneTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		if fsmRawOptions.ShortGroupTablePath != "" || fsmRawOptions.GroupTablePath != "" {
-			groupTableReader, _, err := tools.ValidateGroupTableOptions(&fsmRawOptions.ShortGroupTablePath, &fsmRawOptions.GroupTablePath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-			groupTable, err = fsmtsv.ParseGroupTable(groupTableReader)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
 	}
 
-	if compositeProcessTableShortPath != "" || compositeProcessTableLongPath != "" {
-		compositeProcessTableReader, _, err := tools.ValidateCompositeProcessTableOptions(&compositeProcessTableShortPath, &compositeProcessTableLongPath, cwd)
+	var resourceTable *fsmtable.ResourceTable
+	if fsmOptions.ResourceTableReader != nil {
+		resourceTable, err = fsmtsv.ParseResourceTable(fsmOptions.ResourceTableReader)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}
-		compositeProcessTable, err = pfdtsv.ParseCompositeProcessTable(compositeProcessTableReader)
+	}
+
+	var milestoneTable *fsmtable.MilestoneTable
+	if fsmOptions.MilestoneTableReader != nil {
+		milestoneTable, err = fsmtsv.ParseMilestoneTable(fsmOptions.MilestoneTableReader)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
+	}
+
+	var groupTable *fsmtable.GroupTable
+	if fsmOptions.GroupTableReader != nil {
+		groupTable, err = fsmtsv.ParseGroupTable(fsmOptions.GroupTableReader)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 		}

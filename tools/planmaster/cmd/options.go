@@ -11,10 +11,19 @@ import (
 	"github.com/Kuniwak/pfd-tools/tools"
 )
 
+type MasterScheduleOutputFormat string
+
+const (
+	MasterScheduleOutputFormatGoogleSpreadsheetTSV MasterScheduleOutputFormat = "google-spreadsheet-tsv"
+	MasterScheduleOutputFormatMermaid              MasterScheduleOutputFormat = "mermaid"
+	MasterScheduleOutputFormatPlantUML             MasterScheduleOutputFormat = "plantuml"
+)
+
 type Options struct {
 	CommonOptions            *tools.CommonOptions
 	BusinessTimeFuncOptions  *tools.BusinessTimeFuncOptions
 	BufferMultiplier         float64
+	OutputFormat             MasterScheduleOutputFormat
 	PlanReader               io.Reader
 	AtomicProcessTableReader io.Reader
 	MilestoneTableReader     io.Reader
@@ -66,6 +75,9 @@ Example
 	var groupTableShortPath, groupTableLongPath string
 	flags.StringVar(&groupTableShortPath, "g", "", "path to the group table")
 	flags.StringVar(&groupTableLongPath, "group", "", "path to the group table")
+
+	var outFormat string
+	flags.StringVar(&outFormat, "out-format", "google-spreadsheet-tsv", "output format (available: google-spreadsheet-tsv, mermaid, plantuml)")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -142,6 +154,18 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	var outputFormat MasterScheduleOutputFormat
+	switch outFormat {
+	case "", "google-spreadsheet-tsv":
+		outputFormat = MasterScheduleOutputFormatGoogleSpreadsheetTSV
+	case "mermaid":
+		outputFormat = MasterScheduleOutputFormatMermaid
+	case "plantuml":
+		outputFormat = MasterScheduleOutputFormatPlantUML
+	default:
+		return nil, fmt.Errorf("cmd.ParseOptions: invalid output format: %q", outFormat)
+	}
+
 	planReader, err := os.Open(planPath)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
@@ -151,6 +175,7 @@ Example
 		CommonOptions:            commonOptions,
 		BusinessTimeFuncOptions:  businessTimeFuncOptions,
 		BufferMultiplier:         bufferMultiplier,
+		OutputFormat:             outputFormat,
 		PlanReader:               planReader,
 		AtomicProcessTableReader: atomicProcessTableReader,
 		MilestoneTableReader:     milestoneTableReader,

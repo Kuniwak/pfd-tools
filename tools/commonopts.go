@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Kuniwak/pfd-tools/bizday"
+	"github.com/Kuniwak/pfd-tools/cli"
 	"github.com/Kuniwak/pfd-tools/locale"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmreporter"
@@ -63,7 +64,7 @@ func DeclareCommonOptions(flags *flag.FlagSet, options *CommonRawOptions) {
 	flags.BoolVar(&options.Version, "version", false, "show version")
 	flags.BoolVar(&options.Silent, "silent", false, "silent mode")
 	flags.BoolVar(&options.Debug, "debug", false, "debug mode")
-	flags.StringVar(&options.Locale, "locale", "en", "locale of the project")
+	flags.StringVar(&options.Locale, "locale", "ja", "locale of the fsmreporter")
 }
 
 func ValidateCommonOptions(options *CommonRawOptions) (*CommonOptions, error) {
@@ -88,8 +89,6 @@ func ValidateCommonOptions(options *CommonRawOptions) (*CommonOptions, error) {
 		if l, err = locale.Parse(options.Locale); err != nil {
 			return nil, fmt.Errorf("cmd.ValidateCommonOptions: %w", err)
 		}
-	} else {
-		l = locale.LocaleEn
 	}
 
 	return &CommonOptions{
@@ -137,6 +136,7 @@ type FSMOptions struct {
 	PFDReader                            io.Reader `json:"-"`
 	AtomicProcessTableReader             io.Reader `json:"-"`
 	AtomicDeliverableTableReader         io.Reader `json:"-"`
+	CompositeProcessTableReader          io.Reader `json:"-"`
 	CompositeDeliverableTableReader      io.Reader `json:"-"`
 	ResourceTableReader                  io.Reader `json:"-"`
 	MilestoneTableReader                 io.Reader `json:"-"`
@@ -151,6 +151,8 @@ type FSMRawOptions struct {
 	ShortAtomicProcessTablePath          string `json:"-"`
 	AtomicDeliverableTablePath           string `json:"atomic_deliverable_table"`
 	ShortAtomicDeliverableTablePath      string `json:"-"`
+	CompositeProcessTablePath            string `json:"composite_process_table"`
+	ShortCompositeProcessTablePath       string `json:"-"`
 	CompositeDeliverableTablePath        string `json:"composite_deliverable_table"`
 	ShortCompositeDeliverableTablePath   string `json:"-"`
 	ResourceTablePath                    string `json:"resource_table"`
@@ -316,6 +318,7 @@ func DeclareFSMOptions(flags *flag.FlagSet, options *FSMRawOptions, configLongPa
 	flags.IntVar(&options.MaximalAvailableAllocationsThreshold, "maximal-available-allocations-threshold", 10, "use only maximal available allocations if number of newly allocatable atomic processes is greater than the threshold. do not use maximal available allocations if threshold is not positive")
 	DeclareAtomicProcessTableOptions(flags, &options.ShortAtomicProcessTablePath, &options.AtomicProcessTablePath)
 	DeclareAtomicDeliverableTableOptions(flags, &options.ShortAtomicDeliverableTablePath, &options.AtomicDeliverableTablePath)
+	DeclareCompositeProcessTableOptions(flags, &options.ShortCompositeProcessTablePath, &options.CompositeProcessTablePath)
 	DeclareCompositeDeliverableTableOptions(flags, &options.ShortCompositeDeliverableTablePath, &options.CompositeDeliverableTablePath)
 	DeclareResourceTableOptions(flags, &options.ShortResourceTablePath, &options.ResourceTablePath)
 	DeclareMilestoneTableOptions(flags, &options.ShortMilestoneTablePath, &options.MilestoneTablePath)
@@ -323,78 +326,190 @@ func DeclareFSMOptions(flags *flag.FlagSet, options *FSMRawOptions, configLongPa
 	DeclareConfigOptions(flags, configShortPath, configLongPath)
 }
 
-func ValidateFSMOptionsOrConfig(rawOptions *FSMRawOptions, configShortPath *string, configLongPath *string, cwd string) (*FSMOptions, error) {
-	if *configShortPath != "" || *configLongPath != "" {
-		options, err := ValidateFSMOptionsJSON(configShortPath, configLongPath, *rawOptions)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ValidateFSMOptionsOrConfig: %w", err)
-		}
-		return options, nil
+// ReadFSMRawOptions reads FSMRawOptions from config JSON (if specified) with CLI flag overrides.
+// If no config is specified, returns cliOptions as-is with cwd as basePath.
+// If config is specified, reads JSON as base values and applies CLI flag overrides on top.
+func ReadFSMRawOptions(configShortPath *string, configLongPath *string, cliOptions FSMRawOptions, cwd string) (FSMRawOptions, string, error) {
+	if *configShortPath == "" && *configLongPath == "" {
+		return cliOptions, cwd, nil
 	}
-	options, err := ValidateFSMOptions(rawOptions, cwd)
+
+	configPath := *configLongPath
+	if *configShortPath != "" {
+		configPath = *configShortPath
+	}
+
+	basePath := filepath.Dir(configPath)
+
+	r, err := os.Open(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptionsOrConfig: %w", err)
+		return FSMRawOptions{}, "", fmt.Errorf("tools.ReadFSMRawOptions: %w", err)
 	}
-	return options, nil
+	defer r.Close()
+
+	var result FSMRawOptions
+	if err := json.NewDecoder(r).Decode(&result); err != nil {
+		return FSMRawOptions{}, "", fmt.Errorf("tools.ReadFSMRawOptions: %w", err)
+	}
+
+	// CLI flags override JSON values (short flag > long flag > JSON value)
+	cli.OverrideIfSet(&result.PFDPath, cliOptions.ShortPFDPath, cliOptions.PFDPath)
+	cli.OverrideIfSet(&result.AtomicProcessTablePath, cliOptions.ShortAtomicProcessTablePath, cliOptions.AtomicProcessTablePath)
+	cli.OverrideIfSet(&result.AtomicDeliverableTablePath, cliOptions.ShortAtomicDeliverableTablePath, cliOptions.AtomicDeliverableTablePath)
+	cli.OverrideIfSet(&result.CompositeProcessTablePath, cliOptions.ShortCompositeProcessTablePath, cliOptions.CompositeProcessTablePath)
+	cli.OverrideIfSet(&result.CompositeDeliverableTablePath, cliOptions.ShortCompositeDeliverableTablePath, cliOptions.CompositeDeliverableTablePath)
+	cli.OverrideIfSet(&result.ResourceTablePath, cliOptions.ShortResourceTablePath, cliOptions.ResourceTablePath)
+	cli.OverrideIfSet(&result.MilestoneTablePath, cliOptions.ShortMilestoneTablePath, cliOptions.MilestoneTablePath)
+	cli.OverrideIfSet(&result.GroupTablePath, cliOptions.ShortGroupTablePath, cliOptions.GroupTablePath)
+
+	if cliOptions.MaximalAvailableAllocationsThreshold != 0 {
+		result.MaximalAvailableAllocationsThreshold = cliOptions.MaximalAvailableAllocationsThreshold
+	}
+
+	return result, basePath, nil
 }
 
-func ValidateFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions, error) {
+// ValidateAllFSMOptions validates FSMRawOptions requiring pfd, ap, r, ad, cd.
+// Optional fields (m, g) are opened only when their paths are non-empty.
+func ValidateAllFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions, error) {
 	pfdReader, _, err := ValidatePFDOptions(&options.ShortPFDPath, &options.PFDPath, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptions: %w", err)
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
 	atomicProcessTableReader, _, err := ValidateAtomicProcessTableOptions(&options.ShortAtomicProcessTablePath, &options.AtomicProcessTablePath, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptions: %w", err)
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
 	resourceTableReader, _, err := ValidateResourceTableOptions(&options.ShortResourceTablePath, &options.ResourceTablePath, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptions: %w", err)
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
 	atomicDeliverableTableReader, _, err := ValidateAtomicDeliverableTableOptions(&options.ShortAtomicDeliverableTablePath, &options.AtomicDeliverableTablePath, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptions: %w", err)
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
 	compositeDeliverableTableReader, _, err := ValidateCompositeDeliverableTableOptions(&options.ShortCompositeDeliverableTablePath, &options.CompositeDeliverableTablePath, basePath)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptions: %w", err)
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+	}
+
+	var compositeProcessTableReader io.Reader
+	if options.CompositeProcessTablePath != "" {
+		compositeProcessTableReader, _, err = ValidateCompositeProcessTableOptions(&options.ShortCompositeProcessTablePath, &options.CompositeProcessTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
+	}
+
+	var milestoneTableReader io.Reader
+	if options.MilestoneTablePath != "" {
+		milestoneTableReader, _, err = ValidateMilestoneTableOptions(&options.ShortMilestoneTablePath, &options.MilestoneTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
+	}
+
+	var groupTableReader io.Reader
+	if options.GroupTablePath != "" {
+		groupTableReader, _, err = ValidateGroupTableOptions(&options.ShortGroupTablePath, &options.GroupTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
 	}
 
 	return &FSMOptions{
 		PFDReader:                            pfdReader,
 		AtomicProcessTableReader:             atomicProcessTableReader,
 		AtomicDeliverableTableReader:         atomicDeliverableTableReader,
+		CompositeProcessTableReader:          compositeProcessTableReader,
 		CompositeDeliverableTableReader:      compositeDeliverableTableReader,
 		ResourceTableReader:                  resourceTableReader,
+		MilestoneTableReader:                 milestoneTableReader,
+		GroupTableReader:                     groupTableReader,
 		MaximalAvailableAllocationsThreshold: options.MaximalAvailableAllocationsThreshold,
 	}, nil
 }
 
-func ValidateFSMOptionsJSON(shortPath *string, longPath *string, rawOptions FSMRawOptions) (*FSMOptions, error) {
-	path := *longPath
-	if *shortPath != "" {
-		path = *shortPath
+// ValidatePossibleFSMOptions validates FSMRawOptions treating all fields as optional.
+// Each field is opened only when its path is non-empty; otherwise the reader is nil.
+func ValidatePossibleFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions, error) {
+	var err error
+
+	var pfdReader io.Reader
+	if options.PFDPath != "" || options.ShortPFDPath != "" {
+		pfdReader, _, err = ValidatePFDOptions(&options.ShortPFDPath, &options.PFDPath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
 	}
 
-	basePath := filepath.Dir(path)
-
-	r, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptionsJSON: %w", err)
-	}
-	defer r.Close()
-
-	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(&rawOptions); err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptionsJSON: %w", err)
+	var atomicProcessTableReader io.Reader
+	if options.AtomicProcessTablePath != "" || options.ShortAtomicProcessTablePath != "" {
+		atomicProcessTableReader, _, err = ValidateAtomicProcessTableOptions(&options.ShortAtomicProcessTablePath, &options.AtomicProcessTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
 	}
 
-	options, err := ValidateFSMOptions(&rawOptions, basePath)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ValidateFSMOptionsJSON: %w", err)
+	var resourceTableReader io.Reader
+	if options.ResourceTablePath != "" || options.ShortResourceTablePath != "" {
+		resourceTableReader, _, err = ValidateResourceTableOptions(&options.ShortResourceTablePath, &options.ResourceTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
 	}
 
-	return options, nil
+	var atomicDeliverableTableReader io.Reader
+	if options.AtomicDeliverableTablePath != "" || options.ShortAtomicDeliverableTablePath != "" {
+		atomicDeliverableTableReader, _, err = ValidateAtomicDeliverableTableOptions(&options.ShortAtomicDeliverableTablePath, &options.AtomicDeliverableTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
+	}
+
+	var compositeProcessTableReader io.Reader
+	if options.CompositeProcessTablePath != "" || options.ShortCompositeProcessTablePath != "" {
+		compositeProcessTableReader, _, err = ValidateCompositeProcessTableOptions(&options.ShortCompositeProcessTablePath, &options.CompositeProcessTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
+	}
+
+	var compositeDeliverableTableReader io.Reader
+	if options.CompositeDeliverableTablePath != "" || options.ShortCompositeDeliverableTablePath != "" {
+		compositeDeliverableTableReader, _, err = ValidateCompositeDeliverableTableOptions(&options.ShortCompositeDeliverableTablePath, &options.CompositeDeliverableTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
+	}
+
+	var milestoneTableReader io.Reader
+	if options.MilestoneTablePath != "" || options.ShortMilestoneTablePath != "" {
+		milestoneTableReader, _, err = ValidateMilestoneTableOptions(&options.ShortMilestoneTablePath, &options.MilestoneTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
+	}
+
+	var groupTableReader io.Reader
+	if options.GroupTablePath != "" || options.ShortGroupTablePath != "" {
+		groupTableReader, _, err = ValidateGroupTableOptions(&options.ShortGroupTablePath, &options.GroupTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+		}
+	}
+
+	return &FSMOptions{
+		PFDReader:                            pfdReader,
+		AtomicProcessTableReader:             atomicProcessTableReader,
+		AtomicDeliverableTableReader:         atomicDeliverableTableReader,
+		CompositeProcessTableReader:          compositeProcessTableReader,
+		CompositeDeliverableTableReader:      compositeDeliverableTableReader,
+		ResourceTableReader:                  resourceTableReader,
+		MilestoneTableReader:                 milestoneTableReader,
+		GroupTableReader:                     groupTableReader,
+		MaximalAvailableAllocationsThreshold: options.MaximalAvailableAllocationsThreshold,
+	}, nil
 }
 
 type SearchQualityPreset string
@@ -519,6 +634,62 @@ func ValidateSearchOptions(searchRawOptions *SearchRawOptions) (fsm.SearchFunc, 
 	}
 
 	return nil, fmt.Errorf("cmd.ValidateSearchOptions: either best or better must be true")
+}
+
+func ValidateSearchWithPrefixOptions(searchRawOptions *SearchRawOptions) (fsm.SearchWithPrefixFunc, error) {
+	if !searchRawOptions.Best && !searchRawOptions.Better && !searchRawOptions.Poor {
+		return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: either best or better or poor must be true")
+	}
+
+	if searchRawOptions.Poor {
+		return fsm.SearchFastestWithPrefix(), nil
+	}
+
+	if searchRawOptions.Best {
+		return fsm.SearchBestPlansWithPrefix(), nil
+	}
+
+	if searchRawOptions.Better {
+		var searchQuality fsm.Quality
+
+		switch strings.ToLower(searchRawOptions.QualityPreset) {
+		case "s", "small":
+			searchQuality = SearchQualityPresetSmall.Quality(searchRawOptions.Quality.RandomSeed)
+		case "m", "medium":
+			searchQuality = SearchQualityPresetMedium.Quality(searchRawOptions.Quality.RandomSeed)
+		case "l", "large":
+			searchQuality = SearchQualityPresetLarge.Quality(searchRawOptions.Quality.RandomSeed)
+		case "xl", "xlarge":
+			searchQuality = SearchQualityPresetXLarge.Quality(searchRawOptions.Quality.RandomSeed)
+		case "xxl", "xxlarge":
+			searchQuality = SearchQualityPresetXXLarge.Quality(searchRawOptions.Quality.RandomSeed)
+		case "d", "default":
+			searchQuality = SearchQualityPresetDefault.Quality(searchRawOptions.Quality.RandomSeed)
+		case "custom":
+			if searchRawOptions.Quality.Weight < 1.0 {
+				return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: weight must be >= 1.0")
+			}
+			if searchRawOptions.Quality.NodeBudget < 1 {
+				return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: node-budget must be >= 1")
+			}
+			if searchRawOptions.Quality.TopKPerState < 0 {
+				return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: top-k-per-state must be >= 0")
+			}
+			if searchRawOptions.Quality.MaxResults < 1 {
+				return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: max-results must be >= 1")
+			}
+			if searchRawOptions.Quality.Restarts < 0 {
+				return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: restarts must be >= 0")
+			}
+			searchQuality = searchRawOptions.Quality
+		default:
+			return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: invalid quality preset: %q", searchRawOptions.QualityPreset)
+		}
+
+		return fsm.SearchBetterPlansWithPrefix(searchQuality), nil
+	}
+
+	return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: either best or better must be true")
 }
 
 type BusinessTimeFuncRawOptions struct {
@@ -649,14 +820,32 @@ const (
 	PlanOutputFormatGoogleSpreadsheetTSV PlanOutputFormat = "google-spreadsheet-tsv"
 	PlanOutputFormatPlanJSON             PlanOutputFormat = "plan-json"
 	PlanOutputFormatTimelineJSON         PlanOutputFormat = "timeline-json"
+	PlanOutputFormatMermaid              PlanOutputFormat = "mermaid"
+	PlanOutputFormatPlantUML             PlanOutputFormat = "plantuml"
 )
 
 func DeclarePlanOutputFormatOptions(flags *flag.FlagSet, options *PlanOutputFormatRawOptions) {
 	DeclareBusinessTimeFuncOptions(flags, &options.BusinessTimeFuncRawOptions)
-	flags.StringVar(&options.OutputFormat, "out-format", "", "output format (available: google-spreadsheet-tsv, plan-json, timeline-json)")
+	flags.StringVar(&options.OutputFormat, "out-format", "", "output format (available: google-spreadsheet-tsv, plan-json, timeline-json, mermaid, plantuml)")
 }
 
-func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, logger *slog.Logger) (fsmreporter.PlanReporter, PlanOutputFormat, error) {
+var businessTimeFlagNames = []string{"start", "start-time", "duration", "weekdays", "not-biz-days"}
+
+func collectExplicitBusinessTimeFlags(flags *flag.FlagSet) []string {
+	set := make(map[string]struct{}, len(businessTimeFlagNames))
+	for _, name := range businessTimeFlagNames {
+		set[name] = struct{}{}
+	}
+	var explicit []string
+	flags.Visit(func(f *flag.Flag) {
+		if _, ok := set[f.Name]; ok {
+			explicit = append(explicit, f.Name)
+		}
+	})
+	return explicit
+}
+
+func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, flags *flag.FlagSet, logger *slog.Logger) (fsmreporter.PlanReporter, PlanOutputFormat, error) {
 	switch options.OutputFormat {
 	case "", "google-spreadsheet-tsv":
 		businessTimeFuncOptions, err := ValidateBusinessTimeFuncOptions(&options.BusinessTimeFuncRawOptions)
@@ -666,10 +855,27 @@ func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, logger *slog.
 		return fsmreporter.NewGoogleSpreadsheetTimelineTSVReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatGoogleSpreadsheetTSV, nil
 
 	case "plan-json":
+		if explicit := collectExplicitBusinessTimeFlags(flags); len(explicit) > 0 {
+			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: business-time flags cannot be used with plan-json output format: %v", explicit)
+		}
 		return fsmreporter.NewPlanJSONReporter(), PlanOutputFormatPlanJSON, nil
 
 	case "timeline-json":
 		return fsmreporter.NewTimelineJSONReporter(logger), PlanOutputFormatTimelineJSON, nil
+
+	case "mermaid":
+		businessTimeFuncOptions, err := ValidateBusinessTimeFuncOptions(&options.BusinessTimeFuncRawOptions)
+		if err != nil {
+			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
+		}
+		return fsmreporter.NewMermaidGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatMermaid, nil
+
+	case "plantuml":
+		businessTimeFuncOptions, err := ValidateBusinessTimeFuncOptions(&options.BusinessTimeFuncRawOptions)
+		if err != nil {
+			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
+		}
+		return fsmreporter.NewPlantUMLGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatPlantUML, nil
 
 	default:
 		return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: invalid output format: %q", options.OutputFormat)

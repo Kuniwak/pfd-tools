@@ -57,17 +57,17 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		flags.PrintDefaults()
 		fmt.Fprintf(flags.Output(), `
 Example
+  $ pfdlint -f ./path/to/project.json
+  WARNING no-desc Please add a concise description.       [D2]
+  ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D3]
+
+  $ pfdlint -p ./path/to/pfd.drawio -ap ./path/to/ap.tsv -ad ./path/to/ad.tsv -cd ./path/to/cd.tsv -cp ./path/to/cp.tsv -r ./path/to/r.tsv -m ./path/to/m.tsv -g ./path/to/g.tsv
+  WARNING no-desc Please add a concise description.       [D2]
+  ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D3]
+
   $ pfdlint -locale en -f ./path/to/project.json
   WARNING no-desc Please add a concise description.       [D3]
   ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D2]
-
-  $ pfdlint -p ./path/to/pfd.drawio -ap ./path/to/ap.tsv -ad ./path/to/ad.tsv -cd ./path/to/cd.tsv -cp ./path/to/cp.tsv -r ./path/to/r.tsv -m ./path/to/m.tsv -g ./path/to/g.tsv
-  WARNING no-desc Please add a concise description.       [D3]
-  ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D2]
-
-  $ pfdlint -locale ja -f ./path/to/project.json
-  WARNING no-desc 端的な説明を追加してください。  [D2]
-  ERROR   single-src      成果物が複数のプロセスから出力されています。成果物はただ1つのプロセスから出力されるべきです。   [D3]
 `)
 
 	}
@@ -77,32 +77,9 @@ Example
 
 	formatFlag := flags.String("format", "tsv", "format of the fsmreporter")
 
-	var pfdShortPath, pfdLongPath string
-	tools.DeclarePFDOptions(flags, &pfdShortPath, &pfdLongPath)
-
-	var atomicProcessTableShortPath, atomicProcessTableLongPath string
-	tools.DeclareAtomicProcessTableOptions(flags, &atomicProcessTableShortPath, &atomicProcessTableLongPath)
-
-	var atomicDeliverableTableShortPath, atomicDeliverableTableLongPath string
-	tools.DeclareAtomicDeliverableTableOptions(flags, &atomicDeliverableTableShortPath, &atomicDeliverableTableLongPath)
-
-	var compositeProcessTableShortPath, compositeProcessTableLongPath string
-	tools.DeclareCompositeProcessTableOptions(flags, &compositeProcessTableShortPath, &compositeProcessTableLongPath)
-
-	var compositeDeliverableTableShortPath, compositeDeliverableTableLongPath string
-	tools.DeclareCompositeDeliverableTableOptions(flags, &compositeDeliverableTableShortPath, &compositeDeliverableTableLongPath)
-
-	var resourceTableShortPath, resourceTableLongPath string
-	tools.DeclareResourceTableOptions(flags, &resourceTableShortPath, &resourceTableLongPath)
-
-	var milestoneTableShortPath, milestoneTableLongPath string
-	tools.DeclareMilestoneTableOptions(flags, &milestoneTableShortPath, &milestoneTableLongPath)
-
-	var groupTableShortPath, groupTableLongPath string
-	tools.DeclareGroupTableOptions(flags, &groupTableShortPath, &groupTableLongPath)
-
+	var fsmRawOptions tools.FSMRawOptions
 	var configShortPath, configLongPath string
-	tools.DeclareConfigOptions(flags, &configShortPath, &configLongPath)
+	tools.DeclareFSMOptions(flags, &fsmRawOptions, &configShortPath, &configLongPath)
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -125,100 +102,14 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	var pfdReader io.Reader
-	var hasAtomicProcessTable bool
-	var atomicProcessTableReader io.Reader
-	var hasAtomicDeliverableTable bool
-	var atomicDeliverableTableReader io.Reader
-	var hasCompositeProcessTable bool
-	var compositeProcessTableReader io.Reader
-	var hasCompositeDeliverableTable bool
-	var compositeDeliverableTableReader io.Reader
-	var hasResourceTable bool
-	var resourceTableReader io.Reader
-	var hasMilestoneTable bool
-	var milestoneTableReader io.Reader
-	var hasGroupTable bool
-	var groupTableReader io.Reader
-	if configShortPath != "" || configLongPath != "" {
-		fsmOptions, err := tools.ValidateFSMOptionsJSON(&configShortPath, &configLongPath, tools.FSMRawOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
-		pfdReader = fsmOptions.PFDReader
-
-		hasAtomicProcessTable = true
-		atomicProcessTableReader = fsmOptions.AtomicProcessTableReader
-
-		hasAtomicDeliverableTable = true
-		atomicDeliverableTableReader = fsmOptions.AtomicDeliverableTableReader
-
-		hasCompositeDeliverableTable = true
-		compositeDeliverableTableReader = fsmOptions.CompositeDeliverableTableReader
-
-		hasResourceTable = true
-		resourceTableReader = fsmOptions.ResourceTableReader
-	} else {
-		pfdReader, _, err = tools.ValidatePFDOptions(&pfdShortPath, &pfdLongPath, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
-
-		hasAtomicProcessTable = atomicProcessTableShortPath != "" || atomicProcessTableLongPath != ""
-		if hasAtomicProcessTable {
-			atomicProcessTableReader, _, err = tools.ValidateAtomicProcessTableOptions(&atomicProcessTableShortPath, &atomicProcessTableLongPath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		hasAtomicDeliverableTable = atomicDeliverableTableShortPath != "" || atomicDeliverableTableLongPath != ""
-		if hasAtomicDeliverableTable {
-			atomicDeliverableTableReader, _, err = tools.ValidateAtomicDeliverableTableOptions(&atomicDeliverableTableShortPath, &atomicDeliverableTableLongPath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		hasCompositeDeliverableTable = compositeDeliverableTableShortPath != "" || compositeDeliverableTableLongPath != ""
-		if hasCompositeDeliverableTable {
-			compositeDeliverableTableReader, _, err = tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTableShortPath, &compositeDeliverableTableLongPath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
-
-		hasResourceTable = resourceTableShortPath != "" || resourceTableLongPath != ""
-		if hasResourceTable {
-			resourceTableReader, _, err = tools.ValidateResourceTableOptions(&resourceTableShortPath, &resourceTableLongPath, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-			}
-		}
+	mergedOptions, basePath, err := tools.ReadFSMRawOptions(&configShortPath, &configLongPath, fsmRawOptions, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	hasCompositeProcessTable = compositeProcessTableShortPath != "" || compositeProcessTableLongPath != ""
-	if hasCompositeProcessTable {
-		compositeProcessTableReader, _, err = tools.ValidateCompositeProcessTableOptions(&compositeProcessTableShortPath, &compositeProcessTableLongPath, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
-	}
-
-	hasMilestoneTable = milestoneTableShortPath != "" || milestoneTableLongPath != ""
-	if hasMilestoneTable {
-		milestoneTableReader, _, err = tools.ValidateMilestoneTableOptions(&milestoneTableShortPath, &milestoneTableLongPath, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
-	}
-
-	hasGroupTable = groupTableShortPath != "" || groupTableLongPath != ""
-	if hasGroupTable {
-		groupTableReader, _, err = tools.ValidateGroupTableOptions(&groupTableShortPath, &groupTableLongPath, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
+	fsmOptions, err := tools.ValidatePossibleFSMOptions(&mergedOptions, basePath)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
 	var rep allcheckers.Func
@@ -232,21 +123,21 @@ Example
 	}
 
 	return &Options{
-		PFDReader:                       pfdReader,
-		HasAtomicProcessTable:           hasAtomicProcessTable,
-		AtomicProcessTableReader:        atomicProcessTableReader,
-		HasAtomicDeliverableTable:       hasAtomicDeliverableTable,
-		AtomicDeliverableTableReader:    atomicDeliverableTableReader,
-		HasCompositeProcessTable:        hasCompositeProcessTable,
-		CompositeProcessTableReader:     compositeProcessTableReader,
-		HasCompositeDeliverableTable:    hasCompositeDeliverableTable,
-		CompositeDeliverableTableReader: compositeDeliverableTableReader,
-		HasResourceTable:                hasResourceTable,
-		ResourceTableReader:             resourceTableReader,
-		HasMilestoneTable:               hasMilestoneTable,
-		MilestoneTableReader:            milestoneTableReader,
-		HasGroupTable:                   hasGroupTable,
-		GroupTableReader:                groupTableReader,
+		PFDReader:                       fsmOptions.PFDReader,
+		HasAtomicProcessTable:           fsmOptions.AtomicProcessTableReader != nil,
+		AtomicProcessTableReader:        fsmOptions.AtomicProcessTableReader,
+		HasAtomicDeliverableTable:       fsmOptions.AtomicDeliverableTableReader != nil,
+		AtomicDeliverableTableReader:    fsmOptions.AtomicDeliverableTableReader,
+		HasCompositeProcessTable:        fsmOptions.CompositeProcessTableReader != nil,
+		CompositeProcessTableReader:     fsmOptions.CompositeProcessTableReader,
+		HasCompositeDeliverableTable:    fsmOptions.CompositeDeliverableTableReader != nil,
+		CompositeDeliverableTableReader: fsmOptions.CompositeDeliverableTableReader,
+		HasResourceTable:                fsmOptions.ResourceTableReader != nil,
+		ResourceTableReader:             fsmOptions.ResourceTableReader,
+		HasMilestoneTable:               fsmOptions.MilestoneTableReader != nil,
+		MilestoneTableReader:            fsmOptions.MilestoneTableReader,
+		HasGroupTable:                   fsmOptions.GroupTableReader != nil,
+		GroupTableReader:                fsmOptions.GroupTableReader,
 		CommonOptions:                   commonOptions,
 		Reporter:                        rep,
 	}, nil

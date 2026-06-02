@@ -9,14 +9,53 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
+// SearchBestPlansWithPrefix returns an optimal-solution search with a plan prefix.
+func SearchBestPlansWithPrefix() SearchWithPrefixFunc {
+	return func(e *Env, prefix *Plan) (*sets.Set[*Plan], error) {
+		var start State
+		var prefixPlan *Plan
+		if prefix != nil {
+			replayed, replayedState, err := ReplayPrefix(e, prefix)
+			if err != nil {
+				return nil, fmt.Errorf("fsm.SearchBestPlansWithPrefix: %w", err)
+			}
+			start = replayedState
+			prefixPlan = replayed
+		} else {
+			start = e.InitialState()
+		}
+
+		results, err := searchBestPlansFromState(e, start)
+		if err != nil {
+			return nil, err
+		}
+
+		if prefixPlan != nil {
+			merged := sets.NewWithCapacity[*Plan](results.Len())
+			for _, plan := range results.Iter() {
+				combined := prefixPlan.Clone()
+				for _, tr := range plan.Transitions {
+					combined.Add(tr)
+				}
+				merged.Add((*Plan).Compare, combined)
+			}
+			return merged, nil
+		}
+		return results, nil
+	}
+}
+
 func SearchBestPlans() SearchFunc {
 	return searchBestPlans
 }
 
-// searchBestPlans returns execution plans with the shortest completion time (all of them if there are ties).
-// Optimality: Guarantees minimum completion time using Dijkstra (Uniform-Cost Search).
 func searchBestPlans(e *Env) (*sets.Set[*Plan], error) {
 	start := e.InitialState()
+	return searchBestPlansFromState(e, start)
+}
+
+// searchBestPlansFromState returns execution plans with the shortest completion time from the specified start state.
+func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 
 	type parentInfo struct {
 		parent uint64

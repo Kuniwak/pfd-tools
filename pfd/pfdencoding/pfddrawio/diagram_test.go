@@ -21,7 +21,7 @@ var exampleFile = []Diagram{
 			NewEdge("11", "1", "8", "10", StyleMap{"edgeStyle": "none", "html": "1"}),
 			NewVertex("8", "1", "P2: Review", StyleMap{"ellipse": "", "whiteSpace": "wrap", "html": "1"}),
 			NewEdge("12", "1", "10", "3", StyleMap{"edgeStyle": "orthogonalEdgeStyle", "html": "1", "entryX": "0.5", "entryY": "0", "entryDx": "0", "entryDy": "0", "dashed": "1"}),
-			NewVertex("10", "1", "D2: Review\ncomments", StyleMap{"rounded": "0", "whiteSpace": "wrap", "html": "1"}),
+			NewVertex("10", "1", "D2: Reviewcomments", StyleMap{"rounded": "0", "whiteSpace": "wrap", "html": "1"}),
 			NewEdge("17", "1", "13", "16", StyleMap{"edgeStyle": "none", "html": "1"}),
 			NewVertex("13", "1", "P3: Verify", StyleMap{"ellipse": "", "whiteSpace": "wrap", "html": "1"}),
 			NewEdge("14", "1", "5", "13", StyleMap{"edgeStyle": "orthogonalEdgeStyle", "html": "1"}),

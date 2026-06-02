@@ -34,6 +34,42 @@ type Quality struct {
 	Restarts int
 }
 
+// SearchBetterPlansWithPrefix returns a "better" execution plan search with a plan prefix.
+func SearchBetterPlansWithPrefix(q Quality) SearchWithPrefixFunc {
+	return func(e *Env, prefix *Plan) (*sets.Set[*Plan], error) {
+		var start State
+		var prefixPlan *Plan
+		if prefix != nil {
+			replayed, replayedState, err := ReplayPrefix(e, prefix)
+			if err != nil {
+				return nil, fmt.Errorf("fsm.SearchBetterPlansWithPrefix: %w", err)
+			}
+			start = replayedState
+			prefixPlan = replayed
+		} else {
+			start = e.InitialState()
+		}
+
+		results, err := searchBetterPlansFromState(e, q, start)
+		if err != nil {
+			return nil, err
+		}
+
+		if prefixPlan != nil {
+			merged := sets.NewWithCapacity[*Plan](results.Len())
+			for _, plan := range results.Iter() {
+				combined := prefixPlan.Clone()
+				for _, tr := range plan.Transitions {
+					combined.Add(tr)
+				}
+				merged.Add((*Plan).Compare, combined)
+			}
+			return merged, nil
+		}
+		return results, nil
+	}
+}
+
 func SearchBetterPlans(q Quality) SearchFunc {
 	return func(e *Env) (*sets.Set[*Plan], error) {
 		return searchBetterPlans(e, q)
@@ -47,6 +83,11 @@ func SearchBetterPlans(q Quality) SearchFunc {
 //   - If no goal is found within the search budget, return at least one plan
 //     as a fallback using greedy Gantt generation.
 func searchBetterPlans(e *Env, q Quality) (*sets.Set[*Plan], error) {
+	start := e.InitialState()
+	return searchBetterPlansFromState(e, q, start)
+}
+
+func searchBetterPlansFromState(e *Env, q Quality, start State) (*sets.Set[*Plan], error) {
 	normalizeQuality(&q)
 
 	// Restarts for diversity improvement (optional)
@@ -56,7 +97,7 @@ func searchBetterPlans(e *Env, q Quality) (*sets.Set[*Plan], error) {
 		if q.RandomSeed != 0 {
 			seed = q.RandomSeed + int64(trial)*1315423911
 		}
-		plans := e.searchBetterPlansOnce(q, seed)
+		plans := e.searchBetterPlansOnceFromState(q, seed, start)
 		results = append(results, plans...)
 		if len(results) >= q.MaxResults {
 			break
@@ -89,9 +130,11 @@ type parentInfo struct {
 
 // One iteration of Weighted A*.
 func (e *Env) searchBetterPlansOnce(q Quality, seed int64) []*Plan {
-	rng := rand.New(rand.NewSource(seed))
+	return e.searchBetterPlansOnceFromState(q, seed, e.InitialState())
+}
 
-	start := e.InitialState()
+func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State) []*Plan {
+	rng := rand.New(rand.NewSource(seed))
 	h := &maphash.Hash{}
 	if err := HashStateWithoutTime(start, h); err != nil {
 		e.Logger.Warn(fmt.Sprintf("fsm.Env.SearchBetterPlans: %v", err))

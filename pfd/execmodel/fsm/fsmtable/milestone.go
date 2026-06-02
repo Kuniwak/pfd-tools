@@ -12,6 +12,60 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
+// NewMilestoneTableByAtomicProcessTable derives a MilestoneTable from the milestone and group
+// columns of an AtomicProcessTable. Returns an empty table when the milestone column is absent.
+func NewMilestoneTableByAtomicProcessTable(ap *pfd.AtomicProcessTable) *MilestoneTable {
+	empty := &MilestoneTable{ExtraHeaders: []string{}, Rows: []*MilestoneTableRow{}}
+	milestoneIdx := DefaultMilestoneColumnMatchFunc(ap.ExtraHeaders)
+	if milestoneIdx < 0 {
+		return empty
+	}
+	groupIdx := DefaultGroupColumnMatchFunc(ap.ExtraHeaders)
+	type milestoneInfo struct {
+		groups *sets.Set[string]
+	}
+	milestoneMap := make(map[fsmmasterschedule.Milestone]*milestoneInfo)
+	for _, row := range ap.Rows {
+		milestoneText := strings.TrimSpace(row.ExtraCells[milestoneIdx])
+		if milestoneText == "" {
+			continue
+		}
+		mid := fsmmasterschedule.Milestone(milestoneText)
+		info, ok := milestoneMap[mid]
+		if !ok {
+			info = &milestoneInfo{groups: sets.New(strings.Compare)}
+			milestoneMap[mid] = info
+		}
+		if groupIdx >= 0 {
+			groupText := strings.TrimSpace(row.ExtraCells[groupIdx])
+			if groupText != "" {
+				for _, g := range strings.Split(groupText, ",") {
+					g = strings.TrimSpace(g)
+					if g != "" {
+						info.groups.Add(strings.Compare, g)
+					}
+				}
+			}
+		}
+	}
+	rows := make([]*MilestoneTableRow, 0, len(milestoneMap))
+	for mid, info := range milestoneMap {
+		groupParts := make([]string, 0, info.groups.Len())
+		for _, g := range info.groups.Iter() {
+			groupParts = append(groupParts, g)
+		}
+		rows = append(rows, &MilestoneTableRow{
+			MilestoneID: mid,
+			GroupIDs:    strings.Join(groupParts, ","),
+			Description: "",
+			Successors:  "",
+			ExtraCells:  []string{},
+		})
+	}
+	slices.SortFunc(rows, (*MilestoneTableRow).Compare)
+	return &MilestoneTable{ExtraHeaders: []string{}, Rows: rows}
+}
+
 const (
 	MilestoneColumnHeaderJa = "マイルストーン"
 	MilestoneColumnHeaderEn = "Milestone"

@@ -19,6 +19,14 @@ func TestRenumber(t *testing.T) {
 			FilePath:     "testdata/sequential_without_id.drawio",
 			ExpectedPath: "testdata/sequential_with_id.drawio",
 		},
+		{
+			FilePath:     "testdata/default_page_name_en_without_id.drawio",
+			ExpectedPath: "testdata/default_page_name_en_with_id.drawio",
+		},
+		{
+			FilePath:     "testdata/default_page_name_ja_without_id.drawio",
+			ExpectedPath: "testdata/default_page_name_ja_with_id.drawio",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.FilePath, func(t *testing.T) {

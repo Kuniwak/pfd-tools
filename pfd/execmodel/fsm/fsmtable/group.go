@@ -1,11 +1,42 @@
 package fsmtable
 
 import (
+	"slices"
 	"strings"
 
+	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmmasterschedule"
 	"github.com/Kuniwak/pfd-tools/sets"
 )
+
+// NewGroupTableByAtomicProcessTable derives a GroupTable from the group column of an
+// AtomicProcessTable. Returns an empty table when the group column is absent.
+func NewGroupTableByAtomicProcessTable(ap *pfd.AtomicProcessTable) *GroupTable {
+	empty := &GroupTable{ExtraHeaders: []string{}, Rows: []*GroupTableRow{}}
+	groupIdx := DefaultGroupColumnMatchFunc(ap.ExtraHeaders)
+	if groupIdx < 0 {
+		return empty
+	}
+	groupIDs := sets.New(fsmmasterschedule.Group.Compare)
+	for _, row := range ap.Rows {
+		groupText := strings.TrimSpace(row.ExtraCells[groupIdx])
+		if groupText == "" {
+			continue
+		}
+		for _, g := range strings.Split(groupText, ",") {
+			g = strings.TrimSpace(g)
+			if g != "" {
+				groupIDs.Add(fsmmasterschedule.Group.Compare, fsmmasterschedule.Group(g))
+			}
+		}
+	}
+	rows := make([]*GroupTableRow, 0, groupIDs.Len())
+	for _, gid := range groupIDs.Iter() {
+		rows = append(rows, &GroupTableRow{ID: gid, Description: "", ExtraCells: []string{}})
+	}
+	slices.SortFunc(rows, (*GroupTableRow).Compare)
+	return &GroupTable{ExtraHeaders: []string{}, Rows: rows}
+}
 
 type GroupTable struct {
 	ExtraHeaders []string         `json:"extra_headers"`

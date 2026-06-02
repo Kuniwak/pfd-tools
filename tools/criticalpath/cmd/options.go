@@ -13,9 +13,10 @@ import (
 )
 
 type Options struct {
-	CommonOptions *tools.CommonOptions
-	FSMOptions    *tools.FSMOptions
-	SearchFunc    fsm.SearchFunc
+	CommonOptions        *tools.CommonOptions
+	FSMOptions           *tools.FSMOptions
+	SearchFunc           fsm.SearchFunc
+	SearchWithPrefixFunc fsm.SearchWithPrefixFunc
 }
 
 func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
@@ -58,7 +59,12 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	fsmOptions, err := tools.ValidateFSMOptionsOrConfig(&fsmRawOptions, &configShortPath, &configLongPath, cwd)
+	mergedOptions, basePath, err := tools.ReadFSMRawOptions(&configShortPath, &configLongPath, fsmRawOptions, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
+	fsmOptions, err := tools.ValidateAllFSMOptions(&mergedOptions, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
@@ -68,9 +74,15 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	searchWithPrefixFunc, err := tools.ValidateSearchWithPrefixOptions(&searchRawOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
 	return &Options{
-		CommonOptions: commonOptions,
-		FSMOptions:    fsmOptions,
-		SearchFunc:    searchFunc,
+		CommonOptions:        commonOptions,
+		FSMOptions:           fsmOptions,
+		SearchFunc:           searchFunc,
+		SearchWithPrefixFunc: searchWithPrefixFunc,
 	}, nil
 }

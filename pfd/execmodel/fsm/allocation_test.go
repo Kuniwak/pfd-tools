@@ -101,7 +101,7 @@ func TestAvailableAllocations(t *testing.T) {
 
 	expected := sets.New(
 		CompareAllocationByTotalConsumedVolume,
-		// NOTE: Empty allocation is not allowed for the finiteness of FSM state graph exploration. Allowing empty allocation would create infinite transitions that keep making empty allocations.
+		// NOTE: Empty allocations are not allowed in order to ensure the finiteness of the FSM state graph search. Allowing empty allocations would create infinite transitions that keep doing empty allocations forever.
 		// Allocation{},
 		Allocation{
 			"P1": {Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: 2},
@@ -127,6 +127,196 @@ func TestAvailableAllocations(t *testing.T) {
 		Allocation{
 			"P1": {Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: 2},
 		},
+		Allocation{
+			"P1": {Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		},
+	)
+
+	if !reflect.DeepEqual(got, expected) {
+		t.Log(AllocationSetString(expected))
+		t.Log(AllocationSetString(got))
+		t.Error(cmp.Diff(expected, got))
+	}
+}
+
+func TestAvailableAllocationsWithContinuingAllocation(t *testing.T) {
+	initVolume := /* any */ Volume(2)
+	maxLoopCount := /* any */ 3
+	logger := slog.New(slogtest.NewTestHandler(t))
+	// [D1]----> (P1) -> [D2]
+	//    \
+	//     +---> (P2) -> [D3]
+	//
+	// P1 needs R1, P2 needs R1.
+	// P1 is already continuing with R1, so P2 should NOT be allocated R1.
+	p := newSafePFDByUnsafePFD(&pfd.PFD{
+		Nodes: sets.New(
+			(*pfd.Node).Compare,
+			&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "D2", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "D3", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "P1", Type: pfd.NodeTypeAtomicProcess},
+			&pfd.Node{ID: "P2", Type: pfd.NodeTypeAtomicProcess},
+		),
+		Edges: sets.New(
+			(*pfd.Edge).Compare,
+			&pfd.Edge{Source: "D1", Target: "P1"},
+			&pfd.Edge{Source: "D1", Target: "P2"},
+			&pfd.Edge{Source: "P1", Target: "D2"},
+			&pfd.Edge{Source: "P2", Target: "D3"},
+		),
+	})
+	availableTimeFunc := AlwaysAvailableTimeFunc()
+	neededResourceSetsFunc := NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
+		"P1": sets.New(
+			AllocationElement.Compare,
+			AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		),
+		"P2": sets.New(
+			AllocationElement.Compare,
+			AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		),
+	})
+	env := NewEnv(
+		p,
+		sets.New(ResourceID.Compare, "R1"),
+		NewAvailableAllocationsFunc(neededResourceSetsFunc),
+		ConstInitialVolumeFunc(initVolume),
+		ExponentialReworkVolumeFunc(0.5, ConstInitialVolumeFunc(initVolume)),
+		ConstMaxRevisionMap(maxLoopCount, p.FeedbackSourceDeliverables()),
+		NewPreconditionMap(p.AtomicProcesses, map[pfd.AtomicProcessID]*Precondition{}),
+		neededResourceSetsFunc,
+		availableTimeFunc,
+		logger,
+	)
+
+	state := State{
+		Time: 1,
+		RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
+			"P1": 1, // P1 is still running
+			"P2": initVolume,
+		},
+		RevisionMap: map[pfd.AtomicDeliverableID]int{
+			"D1": 1,
+			"D2": 0,
+			"D3": 0,
+		},
+		NumOfCompleteMap: map[pfd.AtomicProcessID]int{
+			"P1": 0,
+			"P2": 0,
+		},
+		// P1 is continuing with R1
+		AllocationShouldContinue: Allocation{
+			"P1": {Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		},
+		UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
+			"P1": sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+			"P2": sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+		},
+	}
+
+	// P2 is newly allocatable (P1 is continuing, not newly allocatable)
+	newlyAllocatables := env.NewlyAllocatables(state)
+	got := NewAvailableAllocationsFunc(neededResourceSetsFunc)(state, newlyAllocatables)
+
+	// P2 needs R1 but P1 is already continuing with R1, so P2 cannot be allocated.
+	// The only valid allocation is just the continuing P1.
+	expected := sets.New(
+		CompareAllocationByTotalConsumedVolume,
+		Allocation{
+			"P1": {Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		},
+	)
+
+	if !reflect.DeepEqual(got, expected) {
+		t.Log(AllocationSetString(expected))
+		t.Log(AllocationSetString(got))
+		t.Error(cmp.Diff(expected, got))
+	}
+}
+
+func TestMaximalAvailableAllocationsWithContinuingAllocation(t *testing.T) {
+	initVolume := /* any */ Volume(2)
+	maxLoopCount := /* any */ 3
+	logger := slog.New(slogtest.NewTestHandler(t))
+	// [D1]----> (P1) -> [D2]
+	//    \
+	//     +---> (P2) -> [D3]
+	//
+	// P1 needs R1, P2 needs R1.
+	// P1 is already continuing with R1, so P2 should NOT be allocated R1.
+	p := newSafePFDByUnsafePFD(&pfd.PFD{
+		Nodes: sets.New(
+			(*pfd.Node).Compare,
+			&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "D2", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "D3", Type: pfd.NodeTypeAtomicDeliverable},
+			&pfd.Node{ID: "P1", Type: pfd.NodeTypeAtomicProcess},
+			&pfd.Node{ID: "P2", Type: pfd.NodeTypeAtomicProcess},
+		),
+		Edges: sets.New(
+			(*pfd.Edge).Compare,
+			&pfd.Edge{Source: "D1", Target: "P1"},
+			&pfd.Edge{Source: "D1", Target: "P2"},
+			&pfd.Edge{Source: "P1", Target: "D2"},
+			&pfd.Edge{Source: "P2", Target: "D3"},
+		),
+	})
+	availableTimeFunc := AlwaysAvailableTimeFunc()
+	neededResourceSetsFunc := NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
+		"P1": sets.New(
+			AllocationElement.Compare,
+			AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		),
+		"P2": sets.New(
+			AllocationElement.Compare,
+			AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		),
+	})
+	env := NewEnv(
+		p,
+		sets.New(ResourceID.Compare, "R1"),
+		NewMaximalAvailableAllocationsFunc(neededResourceSetsFunc),
+		ConstInitialVolumeFunc(initVolume),
+		ExponentialReworkVolumeFunc(0.5, ConstInitialVolumeFunc(initVolume)),
+		ConstMaxRevisionMap(maxLoopCount, p.FeedbackSourceDeliverables()),
+		NewPreconditionMap(p.AtomicProcesses, map[pfd.AtomicProcessID]*Precondition{}),
+		neededResourceSetsFunc,
+		availableTimeFunc,
+		logger,
+	)
+
+	state := State{
+		Time: 1,
+		RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
+			"P1": 1,
+			"P2": initVolume,
+		},
+		RevisionMap: map[pfd.AtomicDeliverableID]int{
+			"D1": 1,
+			"D2": 0,
+			"D3": 0,
+		},
+		NumOfCompleteMap: map[pfd.AtomicProcessID]int{
+			"P1": 0,
+			"P2": 0,
+		},
+		AllocationShouldContinue: Allocation{
+			"P1": {Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
+		},
+		UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
+			"P1": sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+			"P2": sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+		},
+	}
+
+	newlyAllocatables := env.NewlyAllocatables(state)
+	got := NewMaximalAvailableAllocationsFunc(neededResourceSetsFunc)(state, newlyAllocatables)
+
+	// P2 needs R1 but P1 is already continuing with R1, so P2 cannot be allocated.
+	// The only valid allocation is just the continuing P1.
+	expected := sets.New(
+		CompareAllocationByTotalConsumedVolume,
 		Allocation{
 			"P1": {Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1},
 		},
@@ -229,7 +419,7 @@ func TestMaximalAvailableAllocations(t *testing.T) {
 
 	expected := sets.New(
 		CompareAllocationByTotalConsumedVolume,
-		// NOTE: Empty allocation is not allowed for the finiteness of FSM state graph exploration. Allowing empty allocation would create infinite transitions that keep making empty allocations.
+		// NOTE: Empty allocations are not allowed in order to ensure the finiteness of the FSM state graph search. Allowing empty allocations would create infinite transitions that keep doing empty allocations forever.
 		// Allocation{},
 		Allocation{
 			"P1": {Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: 2},

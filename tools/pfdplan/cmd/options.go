@@ -76,12 +76,17 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	fsmOptions, err := tools.ValidateFSMOptionsOrConfig(&fsmRawOptions, &configShortPath, &configLongPath, cwd)
+	mergedOptions, basePath, err := tools.ReadFSMRawOptions(&configShortPath, &configLongPath, fsmRawOptions, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	planReporter, outputFormat, err := tools.ValidatePlanOutputFormat(&planOutputFormatRawOptions, commonOptions.Logger)
+	fsmOptions, err := tools.ValidateAllFSMOptions(&mergedOptions, basePath)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
+	planReporter, outputFormat, err := tools.ValidatePlanOutputFormat(&planOutputFormatRawOptions, flags, commonOptions.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
