@@ -1,0 +1,21 @@
+{
+  "name": "pfd-skills",
+  "version": "5.1.0",
+  "description": "PFD project skills for pfd-tools: project bootstrap and two-point (optimistic/pessimistic) estimation with critical-path analysis, plus Mermaid Gantt or Google Sheets Timeline output.",
+  "author": {
+    "name": "Kuniwak",
+    "url": "https://github.com/Kuniwak"
+  },
+  "homepage": "https://github.com/Kuniwak/pfd-tools",
+  "repository": "https://github.com/Kuniwak/pfd-tools",
+  "license": "MIT",
+  "keywords": [
+    "pfd",
+    "process-flow-diagram",
+    "estimation",
+    "gantt",
+    "critical-path",
+    "project-management"
+  ],
+  "skills": "./.ai/skills/"
+}

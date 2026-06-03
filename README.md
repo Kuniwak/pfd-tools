@@ -13,6 +13,28 @@ Installation
 Download the latest binary from [Releases](https://github.com/Kuniwak/pfd-tools/releases) and place it in a directory that is in your PATH.
 
 
+Skills (Claude Code / Cursor)
+-----------------------------
+
+This repository ships two AI agent skills that automate the workflow described in [Input Files and Creation Steps](#input-files-and-creation-steps):
+
+- **pjm-pfd-project-bootstrap** — scaffolds a new pfd-tools project from a `pfd.drawio.png` template and runs the pre-estimation lint gate.
+- **pjm-pfd-estimation-plan** — produces a two-point (optimistic/pessimistic) estimate, analyzes the critical path, and generates a Mermaid Gantt or a Google Sheets Timeline.
+
+Each skill asks whether to work in English or Japanese before it starts.
+
+### Claude Code
+
+```console
+$ claude
+> /plugin marketplace add Kuniwak/pfd-tools
+> /plugin install pfd-skills@pfd-tools
+```
+
+### Cursor
+
+The skills live under `.cursor/skills/` (and `.agents/skills/`), so Cursor picks them up automatically when this repository is open. To use them in another project, copy the `pjm-pfd-*` directories from [`.ai/skills/`](.ai/skills) into that project's `.cursor/skills/`.
+
 Input Files and Creation Steps
 ------------------------------
 

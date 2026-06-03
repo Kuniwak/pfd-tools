@@ -1,0 +1,18 @@
+{
+  "name": "pfd-tools",
+  "owner": {
+    "name": "Kuniwak",
+    "url": "https://github.com/Kuniwak"
+  },
+  "metadata": {
+    "description": "PFD (Process Flow Diagram) project skills for pfd-tools.",
+    "version": "5.1.0"
+  },
+  "plugins": [
+    {
+      "name": "pfd-skills",
+      "source": "./",
+      "description": "Bootstrap a PFD project and produce two-point (optimistic/pessimistic) estimates with pfd-tools: scaffold tables, lint, run pfdplan, analyze the critical path, and generate a Mermaid Gantt or Google Sheets Timeline."
+    }
+  ]
+}

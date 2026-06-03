@@ -1,0 +1,9 @@
+{
+  "pfd": "pfd.drawio.png",
+  "atomic_process_table": "ap_pessimistic.tsv",
+  "atomic_deliverable_table": "ad.tsv",
+  "composite_deliverable_table": "cd.tsv",
+  "resource_table": "r_pessimistic.tsv",
+  "milestone_table": "m.tsv",
+  "group_table": "g.tsv"
+}
