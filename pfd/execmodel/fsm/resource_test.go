@@ -26,12 +26,12 @@ func FakeNeededResourceSets(rs *sets.Set[ResourceID]) *sets.Set[AllocationElemen
 		if subset.Len() == 0 {
 			continue
 		}
-		// NOTE: Mix both divisible and indivisible resources.
+
 		if i%2 == 0 {
-			// NOTE: Divisible.
+
 			s.Add(AllocationElement.Compare, AllocationElement{Resources: subset, ConsumedVolume: Volume(subset.Len())})
 		} else {
-			// NOTE: Indivisible.
+
 			s.Add(AllocationElement.Compare, AllocationElement{Resources: subset, ConsumedVolume: 1})
 		}
 	}

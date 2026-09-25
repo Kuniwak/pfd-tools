@@ -17,6 +17,8 @@ import (
 
 var ErrNotFound = errors.New("query not found")
 
+const ShortHelp = "PFD の要素の情報を照会します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
 	if err != nil {
@@ -32,6 +34,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	if opts.CommonOptions.Help {
+		return nil
+	}
+
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 
@@ -73,7 +80,7 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		node, ok := nodeMap[pfd.NodeID(query)]
 		if ok {
 			found = true
-			w.Write([]string{query, "PFD[desc]", escapeString(node.Description)})
+			w.Write([]string{query, "PFD[desc]", node.Description})
 			w.Write([]string{query, "PFD[type]", string(node.Type)})
 			sb.Reset()
 			for i, input := range opts.PFD.InputsExceptFeedback(node.ID).Iter() {
@@ -156,9 +163,9 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.AtomicProcessTable.Rows {
 			if string(row.ID) == query {
 				found = true
-				w.Write([]string{query, "AP_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "AP_TABLE[desc]", row.Description})
 				for i, extraCell := range row.ExtraCells {
-					w.Write([]string{query, fmt.Sprintf("AP_TABLE[%s]", opts.AtomicProcessTable.ExtraHeaders[i]), escapeString(extraCell)})
+					w.Write([]string{query, fmt.Sprintf("AP_TABLE[%s]", opts.AtomicProcessTable.ExtraHeaders[i]), extraCell})
 				}
 			}
 		}
@@ -168,9 +175,9 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.AtomicDeliverableTable.Rows {
 			if string(row.ID) == query {
 				found = true
-				w.Write([]string{query, "AD_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "AD_TABLE[desc]", row.Description})
 				for i, extraCell := range row.ExtraCells {
-					w.Write([]string{query, fmt.Sprintf("AD_TABLE[%s]", opts.AtomicDeliverableTable.ExtraHeaders[i]), escapeString(extraCell)})
+					w.Write([]string{query, fmt.Sprintf("AD_TABLE[%s]", opts.AtomicDeliverableTable.ExtraHeaders[i]), extraCell})
 				}
 			}
 		}
@@ -180,9 +187,9 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.CompositeProcessTable.Rows {
 			if string(row.ID) == query {
 				found = true
-				w.Write([]string{query, "CP_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "CP_TABLE[desc]", row.Description})
 				for i, extraCell := range row.ExtraCells {
-					w.Write([]string{query, fmt.Sprintf("CP_TABLE[%s]", opts.CompositeProcessTable.ExtraHeaders[i]), escapeString(extraCell)})
+					w.Write([]string{query, fmt.Sprintf("CP_TABLE[%s]", opts.CompositeProcessTable.ExtraHeaders[i]), extraCell})
 				}
 			}
 		}
@@ -192,12 +199,12 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.CompositeDeliverableTable.Rows {
 			if string(row.ID) == query {
 				found = true
-				w.Write([]string{query, "CD_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "CD_TABLE[desc]", row.Description})
 				for _, deliverable := range row.Deliverables {
 					w.Write([]string{query, "CD_TABLE[deliverable]", string(deliverable)})
 				}
 				for i, extraCell := range row.ExtraCells {
-					w.Write([]string{query, fmt.Sprintf("CD_TABLE[%s]", opts.CompositeDeliverableTable.ExtraHeaders[i]), escapeString(extraCell)})
+					w.Write([]string{query, fmt.Sprintf("CD_TABLE[%s]", opts.CompositeDeliverableTable.ExtraHeaders[i]), extraCell})
 				}
 			}
 		}
@@ -209,7 +216,7 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.MilestoneTable.Rows {
 			if string(row.MilestoneID) == query {
 				found = true
-				w.Write([]string{query, "MILESTONE_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "MILESTONE_TABLE[desc]", row.Description})
 			}
 			if gs, err := fsmtable.ParseGroups(row.GroupIDs); err == nil {
 				w.Write([]string{query, "MILESTONE_TABLE[groups]", row.GroupIDs})
@@ -252,7 +259,7 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 		for _, row := range opts.GroupTable.Rows {
 			if string(row.ID) == query {
 				found = true
-				w.Write([]string{query, "GROUP_TABLE[desc]", escapeString(row.Description)})
+				w.Write([]string{query, "GROUP_TABLE[desc]", row.Description})
 			}
 		}
 	}
@@ -275,7 +282,7 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 					p := precondition.Compile(e.PFD, opts.CommonOptions.Logger)
 					sb := &strings.Builder{}
 					p.Write(sb)
-					w.Write([]string{query, "PRECONDITION", escapeString(sb.String())})
+					w.Write([]string{query, "PRECONDITION", sb.String()})
 				} else {
 					w.Write([]string{query, "PRECONDITION", "not found"})
 				}
@@ -286,8 +293,4 @@ func respondToQuery(query string, opts *Options, w *csv.Writer, sb *strings.Buil
 	}
 
 	return found, nil
-}
-
-func escapeString(s string) string {
-	return strings.Trim(fmt.Sprintf("%q", s), `"`)
 }

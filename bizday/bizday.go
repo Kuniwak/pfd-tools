@@ -9,7 +9,6 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// Day represents a date (year, month, day). Does not hold time information.
 type Day struct {
 	t time.Time
 }
@@ -54,8 +53,6 @@ func (d Day) Compare(d2 Day) int {
 	return d.t.Compare(d2.t)
 }
 
-// Time represents time from 00:00 to 23:59:59.999999999.
-// Does not hold date information.
 type Time struct {
 	t time.Time
 }
@@ -115,10 +112,8 @@ func Join(day Day, t Time) time.Time {
 	return time.Date(day.t.Year(), day.t.Month(), day.t.Day(), t.t.Hour(), t.t.Minute(), t.t.Second(), t.t.Nanosecond(), day.t.Location())
 }
 
-// BusinessHoursFunc day is passed as 00:00:00.000 of that day, start and end are both times of that day, satisfy start < end, and the difference between end and start is constant for any business day.
 type BusinessHoursFunc func(day Day) (start Time, end Time)
 
-// NewBusinessHoursFunc returns a function that returns the business hours for that day when given start and duration.
 func NewBusinessHoursFunc(start Time, duration time.Duration) (BusinessHoursFunc, error) {
 	end, err := start.Add(duration)
 	if err != nil {
@@ -129,10 +124,8 @@ func NewBusinessHoursFunc(start Time, duration time.Duration) (BusinessHoursFunc
 	}, nil
 }
 
-// IsBusinessDayFunc receives day (00:00:00.000) and returns true if that day is a business day, otherwise returns false.
 type IsBusinessDayFunc func(day Day) bool
 
-// NewIsBusinessDayFunc returns a function that returns true if the day is a business day, otherwise returns false, when given weekdays and additionalNotBusinessDays.
 func NewIsBusinessDayFunc(weekdays []time.Weekday, additionalNotBusinessDays *sets.Set[Day]) IsBusinessDayFunc {
 	return func(day Day) bool {
 		if !slices.Contains(weekdays, day.Weekday()) {
@@ -159,10 +152,8 @@ func EverydayIsBusinessDayFunc() IsBusinessDayFunc {
 	}
 }
 
-// BusinessTimeFunc is a function that returns the time after business time t >= 0 has elapsed from start. t = 1.0 means 1 business day worth of business hours.
 type BusinessTimeFunc func(start Day, t float64) time.Time
 
-// PassthroughBusinessTimeFunc is a function that returns the time after bizTimeDuration has elapsed from start. t = 1.0 means 1 business day worth of bizTimeDuration.
 func PassthroughBusinessTimeFunc(startTime Time, bizTimeDuration time.Duration) (BusinessTimeFunc, error) {
 	hoursFunc, err := NewBusinessHoursFunc(startTime, bizTimeDuration)
 	if err != nil {
@@ -171,7 +162,6 @@ func PassthroughBusinessTimeFunc(startTime Time, bizTimeDuration time.Duration) 
 	return NewBusinessTime(hoursFunc, EverydayIsBusinessDayFunc()), nil
 }
 
-// NewBusinessTime returns BusinessTimeFunc from functions that provide start time, business day determination, and business hours.
 func NewBusinessTime(hours BusinessHoursFunc, isBiz IsBusinessDayFunc) BusinessTimeFunc {
 	cachedAddBusinessDays := CachedAddBusinessDays(AddBusinessDays)
 	return func(start Day, t float64) time.Time {
@@ -181,27 +171,21 @@ func NewBusinessTime(hours BusinessHoursFunc, isBiz IsBusinessDayFunc) BusinessT
 
 		day := AddBusinessDays(start, 0, isBiz)
 
-		// Working hours for 1 business day in this calendar (assumed constant)
 		open0, close0 := hours(day)
 		bizDur := close0.Sub(open0)
 		if bizDur <= 0 {
 			panic("BusinessTime: invalid business hours (non-positive length)")
 		}
 
-		// Integer part = full business days, decimal part = progress within the day
 		days := int(math.Floor(float64(t)))
-		frac := float64(t) - float64(days) // 0 <= frac < 1
+		frac := float64(t) - float64(days)
 
-		// Skip days worth of business days first
 		if days > 0 {
 			day = cachedAddBusinessDays(day, days, isBiz)
 		}
 
-		// opening time of that business day + frac * bizDur
 		openN, _ := hours(day)
 
-		// Duration × decimal is truncated to prevent rounding overflow (up to just before reaching end)
-		// Example: 9h * 0.5 = 4h30m
 		offset := time.Duration(float64(bizDur) * frac)
 		return Join(day, openN).Add(offset)
 	}
@@ -209,8 +193,6 @@ func NewBusinessTime(hours BusinessHoursFunc, isBiz IsBusinessDayFunc) BusinessT
 
 type AddBusinessDaysFunc func(day Day, n int, isBiz IsBusinessDayFunc) Day
 
-// AddBusinessDays advances n business days from day (00:00:00 of business day).
-// isBiz determines whether each day from the next day onward is a business day.
 func AddBusinessDays(day Day, n int, isBiz IsBusinessDayFunc) Day {
 	base := day
 	for !isBiz(base) {

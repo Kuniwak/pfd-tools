@@ -18,9 +18,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("holidays", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: holidays -locale <locale>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: holidays -locale <locale>", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
   $ holidays -locale ja
@@ -46,6 +44,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}

@@ -1,0 +1,37 @@
+<mxfile host="test">
+    <diagram id="p1page" name="P1">
+        <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"></mxCell>
+                <mxCell id="1" value="PFD" parent="0"></mxCell>
+                <mxCell id="in" value="D1: 入力" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="120" height="80" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="design" value="P2: 設計する" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="40" width="120" height="80" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="spec" value="D3: 設計書" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="40" width="120" height="80" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="impl" value="P3: 実装する" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="40" width="120" height="80" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="out" value="D2: 出力" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="40" width="120" height="80" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="pe1" style="edgeStyle=none;html=1;" parent="1" source="in" target="design" edge="1">
+                    <mxGeometry relative="1" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="pe2" style="edgeStyle=none;html=1;" parent="1" source="design" target="spec" edge="1">
+                    <mxGeometry relative="1" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="pe3" style="edgeStyle=none;html=1;" parent="1" source="spec" target="impl" edge="1">
+                    <mxGeometry relative="1" as="geometry"></mxGeometry>
+                </mxCell>
+                <mxCell id="pe4" style="edgeStyle=none;html=1;" parent="1" source="impl" target="out" edge="1">
+                    <mxGeometry relative="1" as="geometry"></mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

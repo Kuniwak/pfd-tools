@@ -1,216 +1,151 @@
 version: 2
 
 builds:
+  - id: pfdhelp
+    binary: pfdhelp
+    main: ./tools/pfdhelp/main.go
+    <<: &build_common
+      env:
+        - CGO_ENABLED=0
+      flags:
+        - -trimpath
+      ldflags:
+        - -s -w -X github.com/Kuniwak/pfd-tools/version.Version={{.Version}}
+      mod_timestamp: "{{ .CommitTimestamp }}"
+      goos:
+        - linux
+        - windows
+        - darwin
+      goarch:
+        - amd64
+        - arm64
+
   - id: pfdlint
     binary: pfdlint
     main: ./tools/pfdlint/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdrenum
     binary: pfdrenum
     main: ./tools/pfdrenum/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
+
+  - id: pfdfix
+    binary: pfdfix
+    main: ./tools/pfdfix/main.go
+    <<: *build_common
+
+  - id: pfdestcallout
+    binary: pfdestcallout
+    main: ./tools/pfdestcallout/main.go
+    <<: *build_common
+
+  - id: pfdcpcomp
+    binary: pfdcpcomp
+    main: ./tools/pfdcpcomp/main.go
+    <<: *build_common
+
+  - id: pfdesttable
+    binary: pfdesttable
+    main: ./tools/pfdesttable/main.go
+    <<: *build_common
 
   - id: pfdtable
     binary: pfdtable
     main: ./tools/pfdtable/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdplan
     binary: pfdplan
     main: ./tools/pfdplan/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: holidays
     binary: holidays
     main: ./tools/holidays/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: plantimeline
     binary: plantimeline
     main: ./tools/plantimeline/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: planmaster
     binary: planmaster
     main: ./tools/planmaster/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdquery
     binary: pfdquery
     main: ./tools/pfdquery/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
+
+  - id: pfdticket
+    binary: pfdticket
+    main: ./tools/pfdticket/main.go
+    <<: *build_common
+
+  - id: pfdres
+    binary: pfdres
+    main: ./tools/pfdres/main.go
+    <<: *build_common
 
   - id: criticalpath
     binary: criticalpath
     main: ./tools/criticalpath/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdrun
     binary: pfdrun
     main: ./tools/debug/pfdrun/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdparse
     binary: pfdparse
     main: ./tools/debug/pfdparse/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfdrungraph
     binary: pfdrungraph
     main: ./tools/debug/pfdrungraph/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfddot
     binary: pfddot
     main: ./tools/debug/pfddot/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfddeadlock
     binary: pfddeadlock
     main: ./tools/debug/pfddeadlock/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
   - id: pfddiff
     binary: pfddiff
     main: ./tools/pfddiff/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
+  - id: pfdsort
+    binary: pfdsort
+    main: ./tools/pfdsort/main.go
+    <<: *build_common
+
+  - id: pfddupmark
+    binary: pfddupmark
+    main: ./tools/pfddupmark/main.go
+    <<: *build_common
+  
   - id: bizday
     binary: bizday
     main: ./tools/bizday/main.go
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
+    <<: *build_common
 
 archives:
   - formats: ["tar.gz"]
+    files:
+      - LICENSE
+      - README.md
+      - THIRD_PARTY_NOTICES
     format_overrides:
       - goos: windows
         formats: ["zip"]

@@ -5,5 +5,7 @@
         "resource_table": "r.tsv",
         "composite_deliverable_table": "cd.tsv",
         "milestone_table": "m.tsv",
-        "group_table": "g.tsv"
+        "group_table": "g.tsv",
+        "resource_mode": "finite",
+        "feedback_mode": "enabled"
 }

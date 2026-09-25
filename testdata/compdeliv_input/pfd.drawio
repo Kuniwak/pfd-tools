@@ -1,0 +1,32 @@
+<mxfile host="test">
+    <diagram id="d0" name="P0">
+        <mxGraphModel dx="734" dy="530" grid="1" gridSize="10" page="1" pageWidth="827" pageHeight="1169">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="a1" value="D1: 成果物1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="-40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="a2" value="D2: 成果物2" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="140" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="a4" value="D3: 成果物3" style="rounded=0;whiteSpace=wrap;html=1;strokeWidth=3;" vertex="1" parent="1"><mxGeometry x="220" y="40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="a3" value="P4: プロセス4" style="ellipse;whiteSpace=wrap;html=1;strokeWidth=3;" vertex="1" parent="1"><mxGeometry x="400" y="40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="a6" value="D5: 成果物5" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="580" y="40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="e3" style="html=1;" edge="1" parent="1" source="a4" target="a3"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="e4" style="html=1;" edge="1" parent="1" source="a3" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="d1" name="P4">
+        <mxGraphModel dx="734" dy="530" grid="1" gridSize="10" page="1" pageWidth="827" pageHeight="1169">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="b1" value="D1: 成果物1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="-40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="b2" value="D2: 成果物2" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="140" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="b3" value="P1: プロセス1" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="240" y="40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="b6" value="D5: 成果物5" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="440" y="40" width="120" height="60" as="geometry"/></mxCell>
+                <mxCell id="f1" style="html=1;" edge="1" parent="1" source="b1" target="b3"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="f2" style="html=1;" edge="1" parent="1" source="b2" target="b3"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="f3" style="html=1;" edge="1" parent="1" source="b3" target="b6"><mxGeometry relative="1" as="geometry"/></mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

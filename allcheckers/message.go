@@ -22,6 +22,8 @@ func EnglishMessage(id checkers.ProblemID) string {
 	switch id {
 	case "no-desc":
 		return "Please add a concise description."
+	case "malformed-id":
+		return "The ID should be P<number> or D<number> (sub-numbered IDs like D3.1 are also accepted). The text before the first colon in a label is interpreted as the ID."
 	case "consistent-desc":
 		return "elements with the same ID should have the same description."
 	case "in-field":
@@ -40,6 +42,8 @@ func EnglishMessage(id checkers.ProblemID) string {
 		return "A deliverable should be output from only one process. This includes output through feedback edges."
 	case "acyclic-except-fb":
 		return "If the feedback edge is removed, there is a cycle in the graph."
+	case "acyclic-cd-comp":
+		return "There is a cycle in the composite deliverable nesting."
 	case "cyclic-ex1-fb":
 		return "A feedback loop should contain only one feedback edge."
 	case "weak-conn":
@@ -52,12 +56,16 @@ func EnglishMessage(id checkers.ProblemID) string {
 		return "The input deliverable set of a composite process does not match the input of the atomic processes it contains."
 	case "consistent-output-comp":
 		return "The output deliverable set of a composite process does not match the output of the atomic processes it contains."
+	case "implicit-atomic-composite":
+		return "A composite process has no detail page, so it is treated as a single atomic process with the same name."
 	case "valid-available-time":
 		return "The available time should be a non-negative 64bit float."
 	case "valid-init-volume":
 		return "The initial volume should be a non-negative number."
 	case "malformed-max-revision":
 		return "The max revision should be a 1 or greater integer."
+	case "feedback-edge-not-available":
+		return "Feedback edges are not available in this exec model. Remove the feedback edge or enable feedback edges (-fb enabled)."
 	case "malformed-resources-set-notation":
 		return "The resources set should be a ;-separated string. Each entry should be <resource ID>,<resource ID>,...:<non-negative floating point number>."
 	case "empty-resources-set":
@@ -82,6 +90,10 @@ func EnglishMessage(id checkers.ProblemID) string {
 		return "The deliverable ID is missing from the deliverable table."
 	case "extra-d-table":
 		return "The deliverable ID is extra from the deliverable table."
+	case "missing-cd-table":
+		return "The composite deliverable ID is missing from the composite deliverable table."
+	case "extra-cd-table":
+		return "The composite deliverable ID is extra from the composite deliverable table."
 	case "malformed-precondition":
 		return "The precondition has an syntax error."
 	case "precondition-not-feedback":
@@ -108,6 +120,8 @@ func JapaneseMessage(id checkers.ProblemID) string {
 	switch id {
 	case "no-desc":
 		return "端的な説明を追加してください。"
+	case "malformed-id":
+		return "ID は P<番号> または D<番号> の形式でなければなりません（D3.1 のような枝番付きも可）。ラベルの最初の半角コロンより前は ID として解釈されます。"
 	case "consistent-desc":
 		return "同じIDの要素（複製表示）は説明が一致すべきです。"
 	case "in-field":
@@ -126,6 +140,8 @@ func JapaneseMessage(id checkers.ProblemID) string {
 		return "成果物が複数のプロセスから出力されています。成果物はただ1つのプロセスから出力されるべきです。"
 	case "acyclic-except-fb":
 		return "フィードバック辺を取り除くとグラフに循環路があります。"
+	case "acyclic-cd-comp":
+		return "複合成果物の入れ子に循環があります。"
 	case "cyclic-ex1-fb":
 		return "フィードバックループにはただ1つのフィードバック辺が含まれる必要があります。"
 	case "weak-conn":
@@ -138,12 +154,16 @@ func JapaneseMessage(id checkers.ProblemID) string {
 		return "複合プロセスの入力成果物集合が内包する原子プロセスの入力と整合しません。"
 	case "consistent-output-comp":
 		return "複合プロセスの出力成果物集合が内包する原子プロセスの出力と整合しません。"
+	case "implicit-atomic-composite":
+		return "複合プロセスに詳細ページ（同名ページ）がないため、同名のただ1つの原子プロセスとして扱いました。"
 	case "valid-available-time":
 		return "利用可能時間は非負浮動小数点数でなければなりません。"
 	case "valid-init-volume":
 		return "初期作業量は非負数でなければなりません。"
 	case "malformed-max-revision":
 		return "最大版数は各成果物について1以上の整数でなければなりません。"
+	case "feedback-edge-not-available":
+		return "この実行モデルではフィードバック辺を扱えません。フィードバック辺を削除するか、フィードバック辺を有効にしてください（-fb enabled）。"
 	case "malformed-resources-set-notation":
 		return "資源集合は;区切りの1行のみのCSVでなければなりません。"
 	case "empty-resources-set":
@@ -168,6 +188,10 @@ func JapaneseMessage(id checkers.ProblemID) string {
 		return "成果物IDが成果物表にありません。"
 	case "extra-d-table":
 		return "成果物IDが成果物表に余分です。"
+	case "missing-cd-table":
+		return "複合成果物IDが複合成果物表にありません。"
+	case "extra-cd-table":
+		return "複合成果物IDが複合成果物表に余分です。"
 	case "malformed-precondition":
 		return "開始条件に構文エラーがあります。"
 	case "precondition-not-feedback":

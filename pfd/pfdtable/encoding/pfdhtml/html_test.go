@@ -86,3 +86,29 @@ func TestCompositeProcessTable(t *testing.T) {
 		t.Error(cmp.Diff(want, got))
 	}
 }
+
+func TestCompositeDeliverableTable(t *testing.T) {
+	table := &pfd.CompositeDeliverableTable{
+		ExtraHeaders: []string{"Example"},
+		Rows: []*pfd.CompositeDeliverableRow{
+			{ID: "D0", Description: "Composite Deliverable 0", Deliverables: []pfd.NodeID{"D1", "D2"}, ExtraCells: []string{"A"}},
+			{ID: "D3", Description: "Composite Deliverable 3", Deliverables: []pfd.NodeID{}, ExtraCells: []string{"B"}},
+		},
+	}
+
+	got, err := CompositeDeliverableTable(table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &tablehtml.Table{
+		Header: []string{"ID", "Description", "Deliverables", "Example"},
+		Rows: [][]string{
+			{"D0", "Composite Deliverable 0", "D1,D2", "A"},
+			{"D3", "Composite Deliverable 3", "", "B"},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Error(cmp.Diff(want, got))
+	}
+}

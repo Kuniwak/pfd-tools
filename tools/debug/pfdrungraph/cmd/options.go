@@ -23,9 +23,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfdrungraph", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfdrungraph [options] -p <pfd> [-a <atomic-process-table>] [-d <deliverable-table>] [-r <resource-table>]")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfdrungraph [options] -p <pfd> [-ap <atomic-process-table>] [-ad <atomic-deliverable-table>] [-r <resource-table>]", ShortHelp)
 	}
 
 	var commonRawOptions tools.CommonRawOptions
@@ -53,6 +51,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}

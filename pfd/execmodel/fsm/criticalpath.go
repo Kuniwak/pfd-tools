@@ -3,27 +3,19 @@ package fsm
 import (
 	"cmp"
 	"fmt"
+	"time"
 
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
-	"github.com/Kuniwak/pfd-tools/sets"
 )
 
 type CriticalPathInfo map[pfd.AtomicProcessID]*CriticalPathInfoItem
 
-// There may be times when there is a maximum value m such that increasing the required time of the target atomic process
-// does not increase the overall required time. This m is called the maximum elasticity value.
-// The maximum elasticity value corresponds to the Total float in CPM.
-// There may be times when there is a minimum value n such that decreasing the required time of the target atomic process
-// does not decrease the overall required time. This n is called the minimum elasticity value.
 type CriticalPathInfoItem struct {
-	// Maximum elasticity value.
 	MaximumElasticity execmodel.Time `json:"maximum_elasticity,omitempty"`
 
-	// HasMinimumElasticity indicates whether a minimum elasticity value exists.
 	HasMinimumElasticity bool `json:"has_minimum_elasticity"`
 
-	// Minimum elasticity value.
 	MinimumElasticity execmodel.Time `json:"minimum_elasticity,omitempty"`
 }
 
@@ -36,17 +28,20 @@ func NewCriticalPathInfoFunc(searchFunc SearchWithPrefixFunc) CriticalPathInfoFu
 
 		for i, ap := range e.PFD.AtomicProcesses.Iter() {
 			e.Logger.Info("processing atomic process", "atomic_process", ap, "progress", fmt.Sprintf("%d/%d", i+1, numOfAP))
+			procStart := time.Now()
 			item, err := newCriticalPathInfoItem(ap, e, searchFunc)
 			if err != nil {
 				return nil, fmt.Errorf("fsm.NewCriticalPathInfoFunc: %w", err)
 			}
 			info[ap] = item
+			e.Logger.Debug("fsm.CriticalPath: process done", "atomicProcess", ap, "progress", fmt.Sprintf("%d/%d", i+1, numOfAP), "elapsedMs", time.Since(procStart).Milliseconds())
 		}
 		return info, nil
 	}
 }
 
 func newCriticalPathInfoItem(ap pfd.AtomicProcessID, e *Env, searchFunc SearchWithPrefixFunc) (*CriticalPathInfoItem, error) {
+	baseStart := time.Now()
 	basePlans, err := searchFunc(e, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fsm.NewCriticalPathInfoFunc: %w", err)
@@ -56,16 +51,21 @@ func newCriticalPathInfoItem(ap pfd.AtomicProcessID, e *Env, searchFunc SearchWi
 		return nil, fmt.Errorf("fsm.NewCriticalPathInfoFunc: no base plan found")
 	}
 	leadtime := basePlan.Leadtime()
+	e.Logger.Debug("fsm.CriticalPath: base plan", "atomicProcess", ap, "leadtime", float64(leadtime), "elapsedMs", time.Since(baseStart).Milliseconds())
 
+	maxStart := time.Now()
 	maxElasticity, err := newMaximumElasticity(ap, leadtime, basePlan, e, searchFunc)
 	if err != nil {
 		return nil, fmt.Errorf("fsm.NewCriticalPathInfoFunc: %w", err)
 	}
+	e.Logger.Debug("fsm.CriticalPath: max elasticity", "atomicProcess", ap, "value", float64(maxElasticity), "elapsedMs", time.Since(maxStart).Milliseconds())
 
+	minStart := time.Now()
 	minElasticity, hasMinimumElasticity, err := newMinimumElasticity(ap, leadtime, e, searchFunc)
 	if err != nil {
 		return nil, fmt.Errorf("fsm.NewCriticalPathInfoFunc: %w", err)
 	}
+	e.Logger.Debug("fsm.CriticalPath: min elasticity", "atomicProcess", ap, "value", float64(minElasticity), "hasMinimumElasticity", hasMinimumElasticity, "elapsedMs", time.Since(minStart).Milliseconds())
 
 	return &CriticalPathInfoItem{
 		MaximumElasticity:    maxElasticity,
@@ -74,36 +74,27 @@ func newCriticalPathInfoItem(ap pfd.AtomicProcessID, e *Env, searchFunc SearchWi
 	}, nil
 }
 
-// There may be times when there is a maximum value m such that increasing the required time of the target atomic process
-// does not increase the overall required time. This m is called the maximum elasticity value.
-// The maximum elasticity value corresponds to the Total float in CPM.
-// Using a plan prefix and iterative refinement, it computes the accurate total float even under resource constraints.
 func newMaximumElasticity(ap pfd.AtomicProcessID, leadtime execmodel.Time, basePlan *Plan, e *Env, searchFunc SearchWithPrefixFunc) (execmodel.Time, error) {
 	prefix := PrefixUntilProcessStart(basePlan, ap)
+	baseProcessTime := basePlan.ProcessTime(ap)
 
-	float := leadtime
+	lo := Volume(0)
+	elasticity := execmodel.Time(0)
+	hi := Volume(leadtime) * MaxConsumedVolume(e.NeededResourceSetsFunc(ap))
+	elasticityHi := execmodel.Time(0)
+	hasHi := false
+	linear := true
+
+	extraVolume := hi
 	for i := 0; i < 100; i++ {
+		iterStart := time.Now()
+		extra := extraVolume
 		eLonger := e.Clone()
 		eLonger.InitialVolumeFunc = func(ap2 pfd.AtomicProcessID) Volume {
 			if ap2 == ap {
-				return e.InitialVolumeFunc(ap2) + Volume(float)
+				return e.InitialVolumeFunc(ap2) + extra
 			}
 			return e.InitialVolumeFunc(ap2)
-		}
-		eLonger.NeededResourceSetsFunc = func(ap2 pfd.AtomicProcessID) *sets.Set[AllocationElement] {
-			if ap2 == ap {
-				rs1 := e.NeededResourceSetsFunc(ap2)
-				rs2 := sets.NewWithCapacity[AllocationElement](rs1.Len())
-				for _, rs := range rs1.Iter() {
-					// FIXME: Fixed to 1 to extend by extra amount, but if ConsumedVolume is greater than 1, the optimal allocation might change.
-					if rs.ConsumedVolume != 1 {
-						panic(fmt.Sprintf("fsm.newMaximumElasticity: ConsumedVolume is not 1 is not supported: %v", rs))
-					}
-					rs2.Add(AllocationElement.Compare, AllocationElement{Resources: rs.Resources, ConsumedVolume: 1})
-				}
-				return rs2
-			}
-			return e.NeededResourceSetsFunc(ap2)
 		}
 
 		longerPlans, err := searchFunc(eLonger, prefix)
@@ -114,21 +105,53 @@ func newMaximumElasticity(ap pfd.AtomicProcessID, leadtime execmodel.Time, baseP
 		if !ok {
 			return 0, fmt.Errorf("fsm.newMaximumElasticity: no longer plan found")
 		}
-		longerLeadtime := longerPlan.Leadtime()
 
-		extension := longerLeadtime - leadtime
-		floatNew := float - extension
-		if floatNew == float {
-			break
+		extended := longerPlan.ProcessTime(ap) - baseProcessTime
+		extension := longerPlan.Leadtime() - leadtime
+		e.Logger.Debug("fsm.newMaximumElasticity: refine", "atomicProcess", ap, "iter", i, "extraVolume", float64(extraVolume), "extended", float64(extended), "extension", float64(extension), "lo", float64(lo), "hi", float64(hi), "hasHi", hasHi, "linear", linear, "elapsedMs", time.Since(iterStart).Milliseconds())
+
+		if extension < 0 || extension.ApproximateEqual(0) {
+
+			lo = max(lo, extraVolume)
+			elasticity = max(elasticity, extended)
+
+			if !hasHi {
+				return elasticity, nil
+			}
+
+			if linear {
+				return elasticity, nil
+			}
+		} else {
+			hi, elasticityHi, hasHi = extraVolume, extended, true
+
+			if lo == 0 && extension.ApproximateEqual(extended) {
+				return 0, nil
+			}
 		}
-		float = floatNew
+
+		if elasticity < elasticityHi && elasticityHi-elasticity <= execmodel.MinimumTime {
+			return elasticity, nil
+		}
+		if hi-lo <= MinimumVolume {
+			return elasticity, nil
+		}
+
+		if linear && extension > 0 && extended > 0 {
+			next := extraVolume * Volume(1-extension/extended)
+			if lo < next && next < hi {
+				extraVolume = next
+				continue
+			}
+		}
+		linear = false
+		extraVolume = lo + (hi-lo)/2
 	}
-	return float, nil
+
+	e.Logger.Warn("fsm.newMaximumElasticity: not converged", "atomicProcess", ap, "elasticity", float64(elasticity), "lo", float64(lo), "hi", float64(hi))
+	return elasticity, nil
 }
 
-// There may be times when there is a minimum value n such that decreasing the required time of the target atomic process
-// does not decrease the overall required time. This n is called the minimum elasticity value.
-// There is no term in CPM that corresponds to the minimum elasticity value.
 func newMinimumElasticity(ap pfd.AtomicProcessID, leadtime execmodel.Time, e *Env, searchFunc SearchWithPrefixFunc) (execmodel.Time, bool, error) {
 	eShorter := e.Clone()
 	eShorter.InitialVolumeFunc = func(ap2 pfd.AtomicProcessID) Volume {

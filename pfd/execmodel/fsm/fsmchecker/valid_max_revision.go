@@ -1,8 +1,6 @@
 package fsmchecker
 
 import (
-	"fmt"
-
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
@@ -19,7 +17,8 @@ var ValidMaxRevision = checkers.AtomicChecker[*fsmcommon.Target]{
 		for _, d := range t.PFD.AtomicDeliverables.Iter() {
 			maxRevisionText, ok := t.Memoized.MaxRevisionMap[d]
 			if !ok {
-				panic(fmt.Sprintf("pfd.ValidPFD.AtomicDeliverableDescriptionMap: missing description for deliverable: %q", d))
+
+				continue
 			}
 			isFeedbackSource := t.PFD.FeedbackSourceDeliverables().Contains(pfd.AtomicDeliverableID.Compare, d)
 

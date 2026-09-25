@@ -200,6 +200,6 @@ func writeString(w io.Writer, s string, buf *bytes.Buffer) error {
 		return fmt.Errorf("fsmviz.writeString: %w", err)
 	}
 	bs := bytes.ReplaceAll(buf.Bytes(), []byte("\\n"), []byte("\\l"))
-	w.Write(bs[0 : len(bs)-1]) // Remove trailing \n
+	w.Write(bs[0 : len(bs)-1])
 	return nil
 }

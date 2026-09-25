@@ -7,16 +7,16 @@
                 <mxCell id="4" value="" style="edgeStyle=none;html=1;" parent="1" source="2" target="3" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="2" value="Input deliverable" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="2" value="入力成果物" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="160" y="240" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="6" value="" style="edgeStyle=none;html=1;" parent="1" source="3" target="5" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="3" value="Process" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="3" value="プロセス" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="320" y="240" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="5" value="Output deliverable" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="5" value="出力成果物" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="480" y="240" width="120" height="80" as="geometry"/>
                 </mxCell>
             </root>

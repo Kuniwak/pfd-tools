@@ -264,6 +264,14 @@ func NewSafePFD(
 	}
 }
 
+func MustNewSafePFDByUnsafePFD(p *PFD) *ValidPFD {
+	res, err := NewSafePFDByUnsafePFD(p)
+	if err != nil {
+		panic(fmt.Sprintf("pfd.MustNewSafePFDByUnsafePFD: %s", err))
+	}
+	return res
+}
+
 func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 	logger := slog.New(slog.DiscardHandler)
 	nodeMap := NewNodeMap(p.Nodes, logger)
@@ -402,7 +410,7 @@ func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 			case NodeTypeAtomicDeliverable:
 				d := AtomicDeliverableIDFromNodeID(node2.ID, nodeMap)
 				if edge.IsFeedback {
-					return nil, fmt.Errorf("pfd.NewSafePFD: deliverable: %q is connected to atomic process: %q with feedback edge", d, ap)
+					return nil, fmt.Errorf("pfd.NewSafePFD: atomic process: %q is connected to deliverable: %q with feedback edge", ap, d)
 				}
 
 				relations[ap].Outputs.Add(AtomicDeliverableID.Compare, d)
@@ -422,7 +430,28 @@ func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 				return nil, fmt.Errorf("pfd.NewSafePFD: atomic process node: %q is connected to composite process: %q", edge.Target, edge.Source)
 
 			case NodeTypeCompositeDeliverable:
-				return nil, fmt.Errorf("pfd.NewSafePFD: atomic process node: %q is connected to composite deliverable: %q", edge.Target, edge.Source)
+
+				cd := CompositeDeliverableIDFromNodeID(node2.ID, nodeMap)
+				if edge.IsFeedback {
+					return nil, fmt.Errorf("pfd.NewSafePFD: atomic process: %q is connected to deliverable: %q with feedback edge", ap, cd)
+				}
+
+				ds, ok := dComp[cd]
+				if !ok {
+					return nil, fmt.Errorf("pfd.NewSafePFD: composite deliverable %q has no entry in the composite deliverable table", cd)
+				}
+
+				for _, d := range ds.Iter() {
+					relations[ap].Outputs.Add(AtomicDeliverableID.Compare, d)
+
+					if ap2, ok := memoized.SourceAtomicProcess[d]; ok {
+						if ap2 != ap {
+							return nil, fmt.Errorf("pfd.NewSafePFD: deliverable: %q is connected to multiple atomic processes: %q and %q", d, ap, ap2)
+						}
+					} else {
+						memoized.SourceAtomicProcess[d] = ap
+					}
+				}
 
 			default:
 				panic(fmt.Sprintf("pfd.NewSafePFD: unknown node type: %q", node1.Type))
@@ -432,7 +461,7 @@ func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 			d := AtomicDeliverableIDFromNodeID(node1.ID, nodeMap)
 			switch node2.Type {
 			case NodeTypeCompositeProcess:
-				// Do nothing.
+
 				continue
 
 			case NodeTypeAtomicProcess:
@@ -466,7 +495,7 @@ func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 
 				ds, ok := dComp[cd]
 				if !ok {
-					panic(fmt.Sprintf("pfd.NewSafePFD: missing composite deliverable: %q", cd))
+					return nil, fmt.Errorf("pfd.NewSafePFD: composite deliverable %q has no entry in the composite deliverable table", cd)
 				}
 
 				if edge.IsFeedback {
@@ -490,7 +519,7 @@ func NewSafePFDByUnsafePFD(p *PFD) (*ValidPFD, error) {
 				return nil, fmt.Errorf("pfd.NewSafePFD: composite deliverable node: %q is connected to non-process node: %q", edge.Target, edge.Source)
 
 			case NodeTypeCompositeProcess:
-				// Do nothing.
+
 				continue
 			}
 
@@ -633,6 +662,29 @@ func (s *ValidPFD) NotFeedbackDestinationAtomicProcesses(d AtomicDeliverableID) 
 
 func (s *ValidPFD) FeedbackSourceDeliverables() *sets.Set[AtomicDeliverableID] {
 	return s.Memoized.FeedbackSourceDeliverables
+}
+
+type FeedbackEdge struct {
+	AtomicDeliverable AtomicDeliverableID `json:"atomic_deliverable"`
+	AtomicProcess     AtomicProcessID     `json:"atomic_process"`
+}
+
+func (a FeedbackEdge) Compare(b FeedbackEdge) int {
+	if c := AtomicDeliverableID.Compare(a.AtomicDeliverable, b.AtomicDeliverable); c != 0 {
+		return c
+	}
+	return AtomicProcessID.Compare(a.AtomicProcess, b.AtomicProcess)
+}
+
+func (s *ValidPFD) FeedbackEdges() []FeedbackEdge {
+	res := make([]FeedbackEdge, 0, s.FeedbackSourceDeliverables().Len())
+	for _, d := range s.FeedbackSourceDeliverables().Iter() {
+		for _, ap := range s.FeedbackDestinationAtomicProcesses(d).Iter() {
+			res = append(res, FeedbackEdge{AtomicDeliverable: d, AtomicProcess: ap})
+		}
+	}
+	slices.SortFunc(res, FeedbackEdge.Compare)
+	return res
 }
 
 func (s *ValidPFD) CollectReachableAtomicProcessesExceptFeedback(ap AtomicProcessID, res *sets.Set[AtomicProcessID], logger *slog.Logger) {

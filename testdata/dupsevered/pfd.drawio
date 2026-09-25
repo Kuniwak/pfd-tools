@@ -1,0 +1,112 @@
+<mxfile host="pfd-tools">
+    <diagram id="dupsevered" name="P0">
+        <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="d1" value="D1: 素材" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="0" y="0" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="p1" value="P1: 前工程" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="200" y="0" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2a" value="D2: 中間成果物" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="0" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2b" value="D2: 中間成果物" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1400" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="p2" value="P2: 後工程" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="600" y="1400" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3" value="D3: 製品" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="800" y="1400" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="d1" target="p1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="p1" target="d2a">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="d2b" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="p2" target="d3">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1" value="D101: 部品1" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="300" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb1" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b1" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2" value="D102: 部品2" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="400" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb2" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b2" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3" value="D103: 部品3" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="500" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb3" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b3" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4" value="D104: 部品4" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="600" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb4" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b4" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5" value="D105: 部品5" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="700" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb5" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b5" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6" value="D106: 部品6" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="800" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb6" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b6" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b7" value="D107: 部品7" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="900" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb7" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b7" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b8" value="D108: 部品8" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1000" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb8" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b8" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b9" value="D109: 部品9" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1100" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb9" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b9" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b10" value="D110: 部品10" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1200" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb10" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b10" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b11" value="D111: 部品11" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1300" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb11" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b11" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b12" value="D112: 部品12" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="400" y="1400" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="eb12" style="edgeStyle=none;html=1;jumpStyle=gap;" edge="1" parent="1" source="b12" target="p2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

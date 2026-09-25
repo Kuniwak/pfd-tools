@@ -20,6 +20,8 @@ import (
 
 var ErrProblemsFound = errors.New("cmd.MainCommandByOptions: problems found")
 
+const ShortHelp = "PFD の記法の問題を検出します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
 	if err != nil {
@@ -38,6 +40,11 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 		return nil
 	}
 
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
+		return nil
+	}
+
 	if opts.CommonOptions.Version {
 		fmt.Fprintln(inout.Stdout, version.Version)
 		return nil
@@ -45,16 +52,23 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 	logger := slog.New(slograw.NewHandler(inout.Stderr, opts.CommonOptions.LogLevel))
 
-	parseOpts := &pfdfmt.ParseOptions{}
-	var compositeDeliverableTable *pfd.CompositeDeliverableTable
-	if opts.HasCompositeDeliverableTable {
-		var err error
-		compositeDeliverableTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-		if err != nil {
+	compositeDeliverableTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+	if err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	}
+
+	tableProblems, err := allcheckers.CompositeDeliverableTableProblems(compositeDeliverableTable, logger)
+	if err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	}
+	if len(tableProblems) > 0 {
+		if _, err := allcheckers.ReportProblems(opts.Reporter, tableProblems...); err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
-		parseOpts.CompositeDeliverableTable = compositeDeliverableTable
+		return ErrProblemsFound
 	}
+
+	parseOpts := &pfdfmt.ParseOptions{CompositeDeliverableTable: compositeDeliverableTable}
 
 	p, err := pfdfmt.Parse("", opts.PFDReader, parseOpts, logger)
 	if err != nil {
@@ -124,7 +138,18 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	lintFunc := allcheckers.NewLintFunc(logger)
 
 	eg.Go(func() error {
-		if err = lintFunc(p, atomicTable, atomicDeliverableTable, compositeProcessTable, compositeDeliverableTable, resourceTable, milestoneTable, groupTable, ch); err != nil {
+		target := allcheckers.Target{
+			PFD:                       p,
+			AtomicProcessTable:        atomicTable,
+			AtomicDeliverableTable:    atomicDeliverableTable,
+			CompositeProcessTable:     compositeProcessTable,
+			CompositeDeliverableTable: compositeDeliverableTable,
+			ResourceTable:             resourceTable,
+			MilestoneTable:            milestoneTable,
+			GroupTable:                groupTable,
+			Model:                     opts.Model,
+		}
+		if err = lintFunc(target, ch); err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
 		return nil

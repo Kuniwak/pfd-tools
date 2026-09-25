@@ -1,4 +1,4 @@
-ID	Description	Est. Work Volume	Est. Rework Volume Ratio	Needed Resources	Start Condition
-P1	Process 1	1	0	R1:1	
-P2	Process 1	1	0	R2:1	
-P3	Process 1	1	0	R3:1	
+ID	説明	予想作業量	予想手戻り作業量割合	必要資源	開始条件
+P1	プロセス1	1	0	R1:1	
+P2	プロセス1	1	0	R2:1	
+P3	プロセス1	1	0	R3:1	

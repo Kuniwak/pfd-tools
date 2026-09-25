@@ -9,7 +9,6 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// Memoized is a collection of memoized calculations that can be memoized in execution model computations.
 type Memoized struct {
 	StringBuilder *strings.Builder
 }
@@ -22,7 +21,6 @@ func (m *Memoized) Clone() *Memoized {
 	}
 }
 
-// NewMemoized returns a new Memoized.
 func NewMemoized() *Memoized {
 	return &Memoized{
 		StringBuilder: &strings.Builder{},

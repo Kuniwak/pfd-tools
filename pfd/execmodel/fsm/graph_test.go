@@ -69,15 +69,7 @@ func TestFindDeadlocks(t *testing.T) {
 			Expected: sets.New(Deadlock.Compare),
 		},
 		"deadlocks": {
-			//    (P1)-> 1 -(P2)
-			//    /             \
-			//   /               V
-			// 0                  3
-			// | \               ^
-			// |  \             /
-			// |  (P3)-> 2 -(P4)
-			// |
-			// +--(P5)-> 4 -(P6)-> 5
+
 			Graph: &StateTransitionGraph{
 				InitialState: 0,
 				Nodes: map[StateID]State{

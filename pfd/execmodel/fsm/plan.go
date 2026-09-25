@@ -9,10 +9,9 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
+	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// Plan is an execution plan.
-// The elements of an execution plan consist of a post-state and the allocation that leads to that post-state.
 type Plan struct {
 	InitialState State    `json:"initial_state"`
 	Transitions  []*Trans `json:"transitions"`
@@ -24,6 +23,14 @@ func ParsePlan(reader io.Reader) (*Plan, error) {
 		return nil, fmt.Errorf("fsm.ParsePlan: %w", err)
 	}
 	return &plan, nil
+}
+
+func (p *Plan) AtomicProcessIDs() *sets.Set[pfd.AtomicProcessID] {
+	aps := sets.New(pfd.AtomicProcessID.Compare)
+	for ap := range p.InitialState.NumOfCompleteMap {
+		aps.Add(pfd.AtomicProcessID.Compare, ap)
+	}
+	return aps
 }
 
 func NewEmptyPlan(initialState State) *Plan {
@@ -62,9 +69,18 @@ func (c *Plan) Leadtime() execmodel.Time {
 	return states[len(states)-1].Time
 }
 
-// PrefixUntilProcessStart returns the portion of the plan's transition sequence
-// up to just before the transition in which the specified atomic process ap is first included in an allocation.
-// If ap is not included in the plan, it returns the entire plan.
+func (c *Plan) ProcessTime(ap pfd.AtomicProcessID) execmodel.Time {
+	states := c.States()
+	total := execmodel.Time(0)
+	for i, tr := range c.Transitions {
+		if _, ok := tr.Allocation[ap]; !ok {
+			continue
+		}
+		total += states[i+1].Time - states[i].Time
+	}
+	return total
+}
+
 func PrefixUntilProcessStart(plan *Plan, ap pfd.AtomicProcessID) *Plan {
 	prefix := NewEmptyPlan(plan.InitialState)
 	for _, tr := range plan.Transitions {

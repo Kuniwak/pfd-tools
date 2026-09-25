@@ -12,29 +12,20 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// Quality is a parameter that summarizes search scale and heuristic weights (speed vs. accuracy trade-off).
 type Quality struct {
-	// Upper limit on node expansion. Roughly corresponds to the upper limit of computation time (higher = more accuracy, more time).
 	NodeBudget int
 
-	// Upper limit on transitions (allocations) considered in each state. Higher values make the search broader.
-	// Unlimited if 0 or negative.
 	TopKPerState int
 
-	// Weighted A* weight (>=1). Larger values bias more strongly toward "likely to finish early" (fast but rough).
 	Weight float64
 
-	// Upper limit on the number of plans to return. Specify when you want multiple candidates.
 	MaxResults int
 
-	// Randomization for tie-breaking and TopK selection. Deterministic if left at 0.
 	RandomSeed int64
 
-	// Number of random restarts (for diversity improvement). No restarts if 0.
 	Restarts int
 }
 
-// SearchBetterPlansWithPrefix returns a "better" execution plan search with a plan prefix.
 func SearchBetterPlansWithPrefix(q Quality) SearchWithPrefixFunc {
 	return func(e *Env, prefix *Plan) (*sets.Set[*Plan], error) {
 		var start State
@@ -76,12 +67,6 @@ func SearchBetterPlans(q Quality) SearchFunc {
 	}
 }
 
-// searchBetterPlans quickly finds "better" execution plans.
-//   - Does not guarantee optimality.
-//   - Can control search scale with Quality.
-//   - To get multiple candidates, increase MaxResults.
-//   - If no goal is found within the search budget, return at least one plan
-//     as a fallback using greedy Gantt generation.
 func searchBetterPlans(e *Env, q Quality) (*sets.Set[*Plan], error) {
 	start := e.InitialState()
 	return searchBetterPlansFromState(e, q, start)
@@ -90,9 +75,9 @@ func searchBetterPlans(e *Env, q Quality) (*sets.Set[*Plan], error) {
 func searchBetterPlansFromState(e *Env, q Quality, start State) (*sets.Set[*Plan], error) {
 	normalizeQuality(&q)
 
-	// Restarts for diversity improvement (optional)
 	results := make([]*Plan, 0, max(1, q.MaxResults))
 	for trial := 0; trial < max(1, q.Restarts+1); trial++ {
+		e.Logger.Debug("fsm.Env.SearchBetterPlans: trial", "trial", trial, "results", len(results))
 		seed := q.RandomSeed
 		if q.RandomSeed != 0 {
 			seed = q.RandomSeed + int64(trial)*1315423911
@@ -128,7 +113,6 @@ type parentInfo struct {
 	child  State
 }
 
-// One iteration of Weighted A*.
 func (e *Env) searchBetterPlansOnce(q Quality, seed int64) []*Plan {
 	return e.searchBetterPlansOnceFromState(q, seed, e.InitialState())
 }
@@ -142,12 +126,10 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 	}
 	startKey := h.Sum64()
 
-	// Record best g-values (time) to prune inferior solutions
 	bestG := map[uint64]execmodel.Time{startKey: start.Time}
 	parents := make(map[uint64]parentInfo, 1024)
 	stateRep := map[uint64]State{startKey: start}
 
-	// Open: f(s) minimum heap
 	pq := &waPQ{}
 	heap.Init(pq)
 	heap.Push(pq, &waItem{
@@ -164,13 +146,14 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 		item := heap.Pop(pq).(*waItem)
 		k, s, g := item.key, item.state, item.g
 
-		// Discard if stale
 		if bg, ok := bestG[k]; !ok || bg != g {
 			continue
 		}
 		expansions++
+		if expansions%searchProgressLogInterval == 0 {
+			e.Logger.Debug("fsm.Env.SearchBetterPlans: progress", "expansions", expansions, "budget", q.NodeBudget, "pqLen", pq.Len(), "found", len(found), "time", float64(s.Time))
+		}
 
-		// Expand
 		trs := e.transitionsSortedForHeuristic(s, rng)
 		if q.TopKPerState > 0 && len(trs) > q.TopKPerState {
 			trs = trs[:q.TopKPerState]
@@ -192,7 +175,7 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 			newG := ns.Time
 
 			if old, ok := bestG[nk]; ok && newG >= old {
-				continue // Existing one is better or equivalent
+				continue
 			}
 			bestG[nk] = newG
 			stateRep[nk] = ns
@@ -202,7 +185,6 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 				child:  ns,
 			}
 
-			// Restore goal (completed state) as soon as found
 			if e.IsCompleted(ns) {
 				if plan, ok := buildPlan(startKey, nk, parents, start); ok {
 					found = append(found, plan)
@@ -210,11 +192,10 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 						break
 					}
 				}
-				// Continue searching for alternative solutions
+
 				continue
 			}
 
-			// Regular node
 			fv := float64(newG) + q.Weight*float64(e.heuristicLB(ns))
 			heap.Push(pq, &waItem{
 				key: nk, state: ns,
@@ -224,17 +205,12 @@ func (e *Env) searchBetterPlansOnceFromState(q Quality, seed int64, start State)
 		}
 	}
 
+	e.Logger.Debug("fsm.Env.SearchBetterPlans: done", "expansions", expansions, "found", len(found))
 	return found
 }
 
-// ===== Heuristic (lower bound target: remaining time approximation) ==========================
-
-// heuristicLB approximates "the minimum time probably needed from the current state to completion".
-//   - The wait time until the maximum available time of initial deliverables (for those not yet arrived) is always required.
-//   - Add remaining work volume / maximum total throughput achievable at the current time (optimistic value).
-//     ※ This is a "lenient" estimate that ignores resource competition and dependencies, so it doesn't guarantee optimality but is effective as a search guideline.
 func (e *Env) heuristicLB(s State) execmodel.Time {
-	// 1) Wait until the "maximum available time of initial deliverables that haven't arrived yet"
+
 	var maxAvail execmodel.Time
 	for _, d := range e.PFD.InitialDeliverables().Iter() {
 		t := e.DeliverableAvailableTimeFunc(d)
@@ -247,13 +223,11 @@ func (e *Env) heuristicLB(s State) execmodel.Time {
 		wait = maxAvail - s.Time
 	}
 
-	// 2) Remaining work volume and "maximum total throughput achievable now"
 	var total Volume
 	for _, v := range s.RemainedVolumeMap {
 		total += v
 	}
 
-	// Among allocations determined from NewlyAllocatables, the one with maximum instantaneous total throughput
 	newly := e.NewlyAllocatables(s)
 	allocs := e.AvailableAllocationsFunc(s, newly)
 	maxTV := Volume(0)
@@ -262,8 +236,7 @@ func (e *Env) heuristicLB(s State) execmodel.Time {
 			maxTV = tv
 		}
 	}
-	// If nothing can be allocated, we need to wait at least until "the time when something happens"
-	// wait is included in 1). Here we treat the work lower bound as 0.
+
 	work := execmodel.Time(0)
 	if maxTV > 0 && total > 0 {
 		work = execmodel.Time(math.Ceil(float64(total) / float64(maxTV)))
@@ -272,9 +245,6 @@ func (e *Env) heuristicLB(s State) execmodel.Time {
 	return wait + work
 }
 
-// transitionsSortedForHeuristic arranges transitions in the order of heuristically "likely to advance".
-// Here we prioritize "high total consumed work volume (instantaneous throughput)" and "early next time".
-// Ties are lightly shuffled with randomization for stabilization.
 func (e *Env) transitionsSortedForHeuristic(s State, rng *rand.Rand) []*Trans {
 	set := e.Transitions(s)
 	trs := make([]*Trans, 0, set.Len())
@@ -285,27 +255,26 @@ func (e *Env) transitionsSortedForHeuristic(s State, rng *rand.Rand) []*Trans {
 		return trs
 	}
 
-	// Light pre-shuffle (deterministic when random seed is 0)
 	if rng != nil && rng.Int63() != 0 {
 		rng.Shuffle(len(trs), func(i, j int) { trs[i], trs[j] = trs[j], trs[i] })
 	}
 
 	slices.SortFunc(trs, func(a, b *Trans) int {
-		// 1) Instantaneous total throughput (descending)
+
 		if ta, tb := a.Allocation.TotalConsumedVolume(), b.Allocation.TotalConsumedVolume(); ta != tb {
 			if ta > tb {
 				return -1
 			}
 			return 1
 		}
-		// 2) Next time (ascending)
+
 		if a.NextState.Time != b.NextState.Time {
 			if a.NextState.Time < b.NextState.Time {
 				return -1
 			}
 			return 1
 		}
-		// 3) Hash for stabilization (ascending)
+
 		ha := hashTrans(a)
 		hb := hashTrans(b)
 		if ha < hb {
@@ -324,8 +293,6 @@ func hashTrans(t *Trans) uint64 {
 	return h.Sum64()
 }
 
-// ====== Plan restoration/fallback ============================================
-
 func buildPlan(startKey, goalKey uint64, parents map[uint64]parentInfo, initialState State) (*Plan, bool) {
 	if startKey == goalKey {
 		return NewEmptyPlan(initialState), true
@@ -342,7 +309,7 @@ func buildPlan(startKey, goalKey uint64, parents map[uint64]parentInfo, initialS
 		})
 		k = p.parent
 	}
-	// Reverse order to forward order
+
 	slices.Reverse(path)
 	pl := make([]*Trans, len(path))
 	copy(pl, path)
@@ -352,13 +319,11 @@ func buildPlan(startKey, goalKey uint64, parents map[uint64]parentInfo, initialS
 	}, true
 }
 
-// ====== PQ for WA* ==========================================================
-
 type waItem struct {
 	key   uint64
 	state State
-	g     execmodel.Time // Real time
-	f     float64        // Priority (smaller is better)
+	g     execmodel.Time
+	f     float64
 	seq   int64
 	index int
 }

@@ -15,7 +15,7 @@ func TestCmd(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	spy := cli.SpyProcInout()
-	exitStatus := MainCommandByArgs([]string{"-f", "testdata/simple/config.json", "-o", tempDir}, spy.NewProcInout())
+	exitStatus := MainCommandByArgs([]string{"-f", "testdata/simple/config.json", "-out-dir", tempDir}, spy.NewProcInout())
 
 	if exitStatus != 0 {
 		t.Log(spy.Stderr.String())

@@ -112,7 +112,6 @@ func (b *RevisionBound) Write(w io.Writer) error {
 type Precondition struct {
 	Type PreconditionType `json:"type"`
 
-	// FeedbackSource is true if the feedback loop has ended, false otherwise. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	FeedbackSource pfd.AtomicDeliverableID `json:"feedback_source,omitempty"`
 
 	ExecBetweenTarget pfd.AtomicDeliverableID `json:"exec_between_target,omitempty"`
@@ -121,19 +120,14 @@ type Precondition struct {
 
 	ExecBetweenEnd *RevisionBound `json:"exec_between_end,omitempty"`
 
-	// Executable is true if the specified atomic process is executable. Behavior is undefined when Type is other than PreconditionTypeExecutable.
 	Executable pfd.AtomicProcessID `json:"executable,omitempty"`
 
-	// Not is the NOT condition. Behavior is undefined when Type is other than PreconditionTypeNot.
 	Not *Precondition `json:"not,omitempty"`
 
-	// Or is the OR condition. Behavior is undefined when Type is other than PreconditionTypeOr.
 	Or []*Precondition `json:"or,omitempty"`
 
-	// And is the AND condition. Behavior is undefined when Type is other than PreconditionTypeAnd.
 	And []*Precondition `json:"and,omitempty"`
 
-	// AllBackwardReachableFeedbackSourcesCompletedTarget is true if all feedback loops from feedback deliverables reachable to the specified atomic process have ended, false otherwise. Behavior is undefined when Type is other than PreconditionTypeAllBackwardReachableFeedbackSourcesCompleted.
 	AllBackwardReachableFeedbackSourcesCompletedTarget pfd.AtomicProcessID `json:"all_backward_reachable_feedback_sources_completed_target,omitempty"`
 }
 
@@ -199,7 +193,6 @@ type PreconditionEvalResult struct {
 	Type   PreconditionType `json:"type"`
 	Result bool             `json:"result"`
 
-	// FeedbackSource is a feedback edge whose completion is specified in the precondition but is not yet completed. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	FeedbackSource pfd.AtomicDeliverableID `json:"feedback_source,omitempty"`
 
 	ExecBetweenTarget pfd.AtomicDeliverableID `json:"exec_between_target,omitempty"`
@@ -208,25 +201,18 @@ type PreconditionEvalResult struct {
 
 	ExecBetweenEnd *RevisionBoundEvalResult `json:"exec_between_end,omitempty"`
 
-	// Executable is true if the specified atomic process is executable, false otherwise. Behavior is undefined when Type is other than PreconditionTypeExecutable.
 	Executable *AllocatabilityInfo `json:"executable,omitempty"`
 
-	// Not is the result of the NOT condition. Behavior is undefined when Type is other than PreconditionTypeNot.
 	Not *PreconditionEvalResult `json:"not,omitempty"`
 
-	// Revision is the revision of the feedback source deliverable. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	Revision int `json:"revision,omitempty"`
 
-	// MaxRevision is the maximum revision of the feedback source deliverable. Behavior is undefined when Type is other than PreconditionTypeFeedbackSourceCompleted.
 	MaxRevision int `json:"max_revision,omitempty"`
 
-	// Or is the result of the OR condition. Behavior is undefined when Type is other than PreconditionTypeOr.
 	Or []*PreconditionEvalResult `json:"or_result,omitempty"`
 
-	// And is the result of the AND condition. Behavior is undefined when Type is other than PreconditionTypeAnd.
 	And []*PreconditionEvalResult `json:"and_result,omitempty"`
 
-	// AllBackwardReachableFeedbackSourcesCompleted is true if all feedback loops have ended, false otherwise. Behavior is undefined when Type is other than PreconditionTypeAllBackwardReachableFeedbackSourcesCompleted.
 	AllBackwardReachableFeedbackSourcesCompleted *PreconditionEvalResult `json:"all_backward_reachable_feedback_sources_completed,omitempty"`
 }
 

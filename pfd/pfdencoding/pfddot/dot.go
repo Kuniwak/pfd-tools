@@ -62,7 +62,7 @@ func DotNode(node *pfd.Node) *dot.Node {
 
 	switch node.Type {
 	case pfd.NodeTypeCompositeProcess, pfd.NodeTypeCompositeDeliverable:
-		break // NOTE: Composite processes and composite deliverables are not displayed.
+		break
 
 	case pfd.NodeTypeAtomicProcess:
 		attrs.Add(dot.CompareAttribute, &pairs.Pair[dot.AttributeName, dot.AttributeValue]{

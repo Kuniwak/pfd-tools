@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Kuniwak/pfd-tools/mastertsv"
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmmasterschedule"
 )
@@ -28,7 +29,7 @@ func TestNewMilestoneTableByAtomicProcessTable(t *testing.T) {
 		},
 		"milestone with group": {
 			AP: apTableWithMilestoneGroup(
-				[]string{MilestoneColumnHeaderJa, GroupColumnHeaderJa},
+				[]string{mastertsv.BarColumnHeader, mastertsv.RowColumnHeader},
 				[][]string{{"M1", "G1"}},
 			),
 			Want: []*MilestoneTableRow{
@@ -37,7 +38,7 @@ func TestNewMilestoneTableByAtomicProcessTable(t *testing.T) {
 		},
 		"multiple processes same milestone different groups": {
 			AP: apTableWithMilestoneGroup(
-				[]string{MilestoneColumnHeaderJa, GroupColumnHeaderJa},
+				[]string{mastertsv.BarColumnHeader, mastertsv.RowColumnHeader},
 				[][]string{{"M1", "G1"}, {"M1", "G2"}},
 			),
 			Want: []*MilestoneTableRow{
@@ -46,14 +47,14 @@ func TestNewMilestoneTableByAtomicProcessTable(t *testing.T) {
 		},
 		"empty milestone cell is skipped": {
 			AP: apTableWithMilestoneGroup(
-				[]string{MilestoneColumnHeaderJa, GroupColumnHeaderJa},
+				[]string{mastertsv.BarColumnHeader, mastertsv.RowColumnHeader},
 				[][]string{{"", "G1"}},
 			),
 			Want: []*MilestoneTableRow{},
 		},
 		"milestone without group column": {
 			AP: apTableWithMilestoneGroup(
-				[]string{MilestoneColumnHeaderJa},
+				[]string{mastertsv.BarColumnHeader},
 				[][]string{{"M1"}},
 			),
 			Want: []*MilestoneTableRow{
@@ -79,6 +80,51 @@ func TestNewMilestoneTableByAtomicProcessTable(t *testing.T) {
 	}
 }
 
+func TestRawMilestoneMap(t *testing.T) {
+	testCases := map[string]struct {
+		AP      *pfd.AtomicProcessTable
+		Want    map[pfd.AtomicProcessID]string
+		WantErr bool
+	}{
+		"missing milestone column": {
+			AP: apTableWithMilestoneGroup(
+				[]string{mastertsv.RowColumnHeader},
+				[][]string{{"G1"}},
+			),
+			WantErr: true,
+		},
+		"with milestone column": {
+			AP: apTableWithMilestoneGroup(
+				[]string{mastertsv.BarColumnHeader, mastertsv.RowColumnHeader},
+				[][]string{{"M1", "G1"}, {"M2", "G1"}},
+			),
+			Want: map[pfd.AtomicProcessID]string{"P1": "M1", "P2": "M2"},
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			got, err := RawMilestoneMap(tc.AP, DefaultBarColumnMatchFunc)
+			if tc.WantErr {
+				if err == nil {
+					t.Fatalf("err = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if len(got) != len(tc.Want) {
+				t.Fatalf("len(got) = %d, want %d", len(got), len(tc.Want))
+			}
+			for ap, milestone := range tc.Want {
+				if got[ap] != milestone {
+					t.Errorf("got[%q] = %q, want %q", ap, got[ap], milestone)
+				}
+			}
+		})
+	}
+}
+
 func TestNewGroupTableByAtomicProcessTable(t *testing.T) {
 	testCases := map[string]struct {
 		AP   *pfd.AtomicProcessTable
@@ -90,21 +136,21 @@ func TestNewGroupTableByAtomicProcessTable(t *testing.T) {
 		},
 		"single group": {
 			AP: apTableWithMilestoneGroup(
-				[]string{GroupColumnHeaderJa},
+				[]string{mastertsv.RowColumnHeader},
 				[][]string{{"G1"}},
 			),
 			Want: []fsmmasterschedule.Group{"G1"},
 		},
 		"comma-separated groups in one cell": {
 			AP: apTableWithMilestoneGroup(
-				[]string{GroupColumnHeaderJa},
+				[]string{mastertsv.RowColumnHeader},
 				[][]string{{"G1,G2"}},
 			),
 			Want: []fsmmasterschedule.Group{"G1", "G2"},
 		},
 		"empty group cell is skipped": {
 			AP: apTableWithMilestoneGroup(
-				[]string{GroupColumnHeaderJa},
+				[]string{mastertsv.RowColumnHeader},
 				[][]string{{""}},
 			),
 			Want: []fsmmasterschedule.Group{},

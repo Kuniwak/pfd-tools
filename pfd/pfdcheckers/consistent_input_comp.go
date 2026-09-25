@@ -22,17 +22,18 @@ var ConsistentInputComp = checkers.AtomicChecker[pfdcommon.Target]{
 				panic(fmt.Sprintf("consistent-input-comp: missing reversed edge map for %s", comp))
 			}
 
+			actualInputs = t.PFD.ExpandCompositeDeliverables(actualInputs)
+
 			outputs := sets.New(pfd.NodeID.Compare)
 			all := sets.New(pfd.NodeID.Compare)
 			for _, p1 := range ps.Iter() {
-				inputs1 := t.PFD.InputsIncludingFeedback(p1)
-				outputs1 := t.PFD.OutputsIncludingFeedback(p1)
+				inputs1 := t.PFD.ExpandCompositeDeliverables(t.PFD.InputsIncludingFeedback(p1))
+				outputs1 := t.PFD.ExpandCompositeDeliverables(t.PFD.OutputsIncludingFeedback(p1))
 				outputs.Union(pfd.NodeID.Compare, outputs1)
 				all.Union(pfd.NodeID.Compare, inputs1)
 				all.Union(pfd.NodeID.Compare, outputs1)
 			}
 
-			// NOTE: allcheckers is no longer used, so we modify it in-place.
 			all.Difference(pfd.NodeID.Compare, outputs)
 			expectedInputs := all
 

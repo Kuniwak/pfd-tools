@@ -12,6 +12,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "PFD の実行グラフを可視化します。（デバッグ用）"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	options, err := ParseOptions(args, inout)
 	if err != nil {
@@ -27,6 +29,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	if opts.CommonOptions.Help {
+		return nil
+	}
+
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 

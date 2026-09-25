@@ -15,7 +15,7 @@ var DisjOrProperSubsetComp = checkers.AtomicChecker[pfdcommon.Target]{
 		const problemID = "disj-or-psubset-comp"
 		for comp1, ps1 := range t.PFD.ProcessComposition {
 			for comp2, ps2 := range t.PFD.ProcessComposition {
-				// NOTE: comp1 and comp2 are different, and there's no need to check twice.
+
 				if comp1 <= comp2 {
 					continue
 				}

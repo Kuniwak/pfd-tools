@@ -15,13 +15,49 @@ func TestDetect(t *testing.T) {
 		Input          []byte
 		ExpectedFormat Format
 	}{
-		"drawio without xml decl": {
-			Input:          []byte(drawioPrefixWithoutXMLDecl + `host="abcdefghijklmnopqrstuvwxyz"></mxfile>`),
+		"drawio without xml decl, with attrs": {
+			Input:          []byte(`<mxfile host="abcdefghijklmnopqrstuvwxyz"></mxfile>`),
 			ExpectedFormat: FormatDrawio,
 		},
-		"drawio with xml decl": {
-			Input:          []byte(drawioPrefixWithXMLDecl + `host="abcdefghijklmnopqrstuvwxyz"></mxfile>`),
+		"drawio without xml decl, no attrs": {
+			Input:          []byte(`<mxfile><diagram id="a" name="Page-1"></diagram></mxfile>`),
 			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with newline terminator": {
+			Input:          []byte("<mxfile\nhost=\"abcdefghijklmnopqrstuvwxyz\"></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with tab terminator": {
+			Input:          []byte("<mxfile\thost=\"abcdefghijklmnopqrstuvwxyz\"></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with xml decl, with attrs": {
+			Input:          []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mxfile host=\"abcdefghijklmnopqrstuvwxyz\"></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with xml decl, no attrs": {
+			Input:          []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mxfile></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio short bare mxfile shorter than maxPrefixLen": {
+			Input:          []byte(`<mxfile></mxfile>`),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with xml decl, crlf before mxfile": {
+			Input:          []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<mxfile host=\"x\"></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"drawio with longer than standard xml decl": {
+			Input:          []byte("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<mxfile></mxfile>"),
+			ExpectedFormat: FormatDrawio,
+		},
+		"mxfile-prefixed element name is not drawio": {
+			Input:          []byte(`<mxfileFoo attr="abcdefghijklmnopqrstuvwxyz"></mxfileFoo>`),
+			ExpectedFormat: FormatUnknown,
+		},
+		"xml decl without mxfile is not drawio": {
+			Input:          []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg>abcdefghijklmnop</svg>"),
+			ExpectedFormat: FormatUnknown,
 		},
 		"json": {
 			Input:          []byte(`{"key": "abcdefghijklmnopqrstuvwxyz0123456789"}`),
@@ -33,6 +69,11 @@ func TestDetect(t *testing.T) {
 		},
 		"unknown": {
 			Input:          []byte("plain text content that does not match any prefix at all"),
+			ExpectedFormat: FormatUnknown,
+		},
+
+		"unknown, shorter than maxPrefixLen": {
+			Input:          []byte("short"),
 			ExpectedFormat: FormatUnknown,
 		},
 	}
@@ -57,17 +98,6 @@ func TestDetect(t *testing.T) {
 	}
 }
 
-func TestDetect_TruncatedPNGSignature(t *testing.T) {
-	// Reading at least 8 bytes should still succeed with FormatUnknown when
-	// non-PNG content is shorter than maxPrefixLen but at least 8 bytes long.
-	input := []byte("short")
-	if _, _, err := Detect(bytes.NewReader(input)); err == nil {
-		t.Errorf("expected error for too-short input, got nil")
-	}
-}
-
-// buildPNGWithMxfile builds a minimal PNG byte stream with a tEXt chunk
-// containing keyword "mxfile" and the given XML URL-encoded as the value.
 func buildPNGWithMxfile(t *testing.T, xml string) []byte {
 	t.Helper()
 	signature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
@@ -93,4 +123,3 @@ func writeChunk(w *bytes.Buffer, typ string, data []byte) {
 	w.Write(data)
 	w.Write([]byte{0x00, 0x00, 0x00, 0x00})
 }
-

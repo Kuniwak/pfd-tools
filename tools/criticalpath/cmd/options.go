@@ -17,15 +17,15 @@ type Options struct {
 	FSMOptions           *tools.FSMOptions
 	SearchFunc           fsm.SearchFunc
 	SearchWithPrefixFunc fsm.SearchWithPrefixFunc
+	CPUProfilePath       string
+	MemProfilePath       string
 }
 
 func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("criticalpath", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: criticalpath [options] <pfd>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: criticalpath [options] (-f <project> | -p <pfd> -ap <atomic-process-table> -ad <atomic-deliverable-table>)", ShortHelp)
 	}
 
 	var commonRawOptions tools.CommonRawOptions
@@ -34,6 +34,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	var configShortPath, configLongPath string
 	var fsmRawOptions tools.FSMRawOptions
 	tools.DeclareFSMOptions(flags, &fsmRawOptions, &configShortPath, &configLongPath)
+
+	cpuProfileFlag := flags.String("cpuprofile", "", "write a CPU profile to the file. the profile is flushed even when interrupted by SIGINT/SIGTERM")
+	memProfileFlag := flags.String("memprofile", "", "write a heap profile to the file. the profile is flushed even when interrupted by SIGINT/SIGTERM")
 
 	var searchRawOptions tools.SearchRawOptions
 	tools.DeclareSearchOptions(flags, &searchRawOptions, rand.Int64())
@@ -50,6 +53,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -84,5 +90,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		FSMOptions:           fsmOptions,
 		SearchFunc:           searchFunc,
 		SearchWithPrefixFunc: searchWithPrefixFunc,
+		CPUProfilePath:       *cpuProfileFlag,
+		MemProfilePath:       *memProfileFlag,
 	}, nil
 }

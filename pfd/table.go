@@ -40,6 +40,14 @@ type AtomicProcessTable struct {
 	Rows         []*AtomicProcessRow `json:"rows"`
 }
 
+func (t *AtomicProcessTable) IDs() []AtomicProcessID {
+	res := make([]AtomicProcessID, 0, len(t.Rows))
+	for _, row := range t.Rows {
+		res = append(res, row.ID)
+	}
+	return res
+}
+
 func NewAtomicProcessTable(p *PFD, nodeMap map[NodeID]*Node) *AtomicProcessTable {
 	rows := make([]*AtomicProcessRow, 0, p.Nodes.Len())
 	for _, node := range p.Nodes.Iter() {
@@ -220,6 +228,9 @@ func (p *CompositeDeliverableTable) Header() []string {
 
 func (p *CompositeDeliverableTable) NodeIDMap(logger *slog.Logger) map[NodeID]*sets.Set[NodeID] {
 	m := make(map[NodeID]*sets.Set[NodeID])
+	if p == nil {
+		return m
+	}
 	for _, row := range p.Rows {
 		if _, ok := m[NodeID(row.ID)]; ok {
 			logger.Warn("CompositeDeliverableTable.Map: duplicate composite deliverable ID", "id", row.ID)
@@ -227,11 +238,45 @@ func (p *CompositeDeliverableTable) NodeIDMap(logger *slog.Logger) map[NodeID]*s
 		}
 		s := sets.NewWithCapacity[NodeID](len(row.Deliverables))
 		for _, deliverable := range row.Deliverables {
-			s.Add(NodeID.Compare, NodeID(deliverable))
+			s.Add(NodeID.Compare, deliverable)
 		}
 		m[NodeID(row.ID)] = s
 	}
 	return m
+}
+
+func (p *CompositeDeliverableTable) NestedIDs(from *sets.Set[CompositeDeliverableID], nodes *sets.Set[*Node]) *sets.Set[CompositeDeliverableID] {
+	candidates := sets.NewWithCapacity[NodeID](len(p.Rows))
+	members := make(map[CompositeDeliverableID][]CompositeDeliverableID, len(p.Rows))
+	for _, row := range p.Rows {
+		candidates.Add(NodeID.Compare, NodeID(row.ID))
+
+		ms := make([]CompositeDeliverableID, 0, len(row.Deliverables))
+		for _, member := range row.Deliverables {
+			ms = append(ms, CompositeDeliverableID(member))
+		}
+		members[row.ID] = ms
+	}
+	composites := CompositeDeliverableIDs(candidates, nodes)
+
+	nested := sets.NewWithCapacity[CompositeDeliverableID](len(p.Rows))
+	rest := from.Slice()
+	for len(rest) > 0 {
+		cd := rest[len(rest)-1]
+		rest = rest[:len(rest)-1]
+
+		for _, member := range members[cd] {
+			if !composites.Contains(NodeID.Compare, NodeID(member)) {
+				continue
+			}
+			if nested.Contains(CompositeDeliverableID.Compare, member) {
+				continue
+			}
+			nested.Add(CompositeDeliverableID.Compare, member)
+			rest = append(rest, member)
+		}
+	}
+	return nested
 }
 
 func (p *CompositeDeliverableTable) Clone() *CompositeDeliverableTable {
@@ -261,6 +306,7 @@ func (p *CompositeDeliverableTable) Refresh(pfd *PFD, nodeMap map[NodeID]*Node) 
 
 	extras := actual.Clone()
 	extras.Difference(CompositeDeliverableID.Compare, expected)
+	extras.Difference(CompositeDeliverableID.Compare, p.NestedIDs(expected, pfd.Nodes))
 
 	missings := expected.Clone()
 	missings.Difference(CompositeDeliverableID.Compare, actual)
@@ -273,7 +319,7 @@ func (p *CompositeDeliverableTable) Refresh(pfd *PFD, nodeMap map[NodeID]*Node) 
 	}
 
 	for _, missing := range missings.Iter() {
-		newRows = append(newRows, &CompositeDeliverableRow{ID: missing, Description: nodeMap[NodeID(missing)].Description, Deliverables: make([]AtomicDeliverableID, 0), ExtraCells: make([]string, len(p.ExtraHeaders))})
+		newRows = append(newRows, &CompositeDeliverableRow{ID: missing, Description: nodeMap[NodeID(missing)].Description, Deliverables: make([]NodeID, 0), ExtraCells: make([]string, len(p.ExtraHeaders))})
 	}
 
 	slices.SortFunc(newRows, (*CompositeDeliverableRow).Compare)
@@ -283,8 +329,28 @@ func (p *CompositeDeliverableTable) Refresh(pfd *PFD, nodeMap map[NodeID]*Node) 
 type CompositeDeliverableRow struct {
 	ID           CompositeDeliverableID `json:"composite_deliverable"`
 	Description  string                 `json:"description"`
-	Deliverables []AtomicDeliverableID  `json:"deliverables"`
+	Deliverables []NodeID               `json:"deliverables"`
 	ExtraCells   []string               `json:"extra_cells"`
+}
+
+func (p *CompositeDeliverableRow) DeliverablesCell() string {
+	ss := make([]string, 0, len(p.Deliverables))
+	for _, d := range p.Deliverables {
+		ss = append(ss, string(d))
+	}
+	return strings.Join(ss, ",")
+}
+
+func ParseDeliverablesCell(cell string) []NodeID {
+	if strings.TrimSpace(cell) == "" {
+		return []NodeID{}
+	}
+	ss := strings.Split(cell, ",")
+	ds := make([]NodeID, 0, len(ss))
+	for _, s := range ss {
+		ds = append(ds, NodeID(strings.TrimSpace(s)))
+	}
+	return ds
 }
 
 func (p *CompositeDeliverableRow) Clone() *CompositeDeliverableRow {
@@ -296,7 +362,7 @@ func (p *CompositeDeliverableRow) Compare(b *CompositeDeliverableRow) int {
 	if c != 0 {
 		return c
 	}
-	c = slices.CompareFunc(p.Deliverables, b.Deliverables, AtomicDeliverableID.Compare)
+	c = slices.CompareFunc(p.Deliverables, b.Deliverables, NodeID.Compare)
 	if c != 0 {
 		return c
 	}
@@ -393,11 +459,8 @@ func (p *CompositeProcessTable) Refresh(pfd *PFD, nodeMap map[NodeID]*Node) {
 	p.Rows = rows
 }
 
-// ColumnSelectFunc returns the corresponding index in ExtraCells from a header string slice. Returns -1 if there is no corresponding header string.
-// If there are multiple identical header strings, which header string's index is returned is undefined.
 type ColumnSelectFunc func(header []string) int
 
-// ColumnMatchFunc returns a ColumnSelectFunc that matches any element in the given header string slice ss.
 func ColumnMatchFunc(headerNameCandidates *sets.Set[string]) ColumnSelectFunc {
 	return func(header []string) int {
 		return slices.IndexFunc(header, func(s string) bool {

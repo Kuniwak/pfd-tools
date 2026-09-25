@@ -18,12 +18,12 @@ var NoP2DFB = checkers.AtomicChecker[pfdcommon.Target]{
 			}
 			src, ok := t.Memoized.NodeMap[edge.Source]
 			if !ok {
-				// NOTE: Skip as it will be caught by in-field.
+
 				continue
 			}
 			target, ok := t.Memoized.NodeMap[edge.Target]
 			if !ok {
-				// NOTE: Skip as it will be caught by in-field.
+
 				continue
 			}
 			if src.Type.IsDeliverable() && target.Type.IsProcess() {

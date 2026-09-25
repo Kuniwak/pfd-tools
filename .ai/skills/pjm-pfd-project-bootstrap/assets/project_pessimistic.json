@@ -5,5 +5,13 @@
   "composite_deliverable_table": "cd.tsv",
   "resource_table": "r_pessimistic.tsv",
   "milestone_table": "m.tsv",
-  "group_table": "g.tsv"
+  "group_table": "g.tsv",
+  "resource_mode": "finite",
+  "feedback_mode": "disabled",
+  "scenario": "pessimistic",
+  "output_format": "mermaid",
+  "start_day": "1970-01-01",
+  "duration": 8,
+  "not_biz_days": "holidays_ja.txt",
+  "worker_count": 1
 }

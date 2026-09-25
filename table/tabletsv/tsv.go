@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+const IDColumnHeader = "ID"
+
 type Table struct {
 	Header []string
 	Rows   [][]string
@@ -18,6 +20,27 @@ func NewTable(header []string, rows [][]string) (*Table, error) {
 		}
 	}
 	return &Table{Header: header, Rows: rows}, nil
+}
+
+func RequireColumns(header []string, minColumns int) error {
+	if len(header) < minColumns {
+		return fmt.Errorf("tabletsv.RequireColumns: 表のヘッダは %d 列以上必要ですが %d 列でした: %v", minColumns, len(header), header)
+	}
+	return nil
+}
+
+func RequireUniqueFirstColumn(rows [][]string) error {
+	seen := make(map[string]struct{}, len(rows))
+	for i, row := range rows {
+		if len(row) == 0 {
+			return fmt.Errorf("tabletsv.RequireUniqueFirstColumn: %d 件目のレコードに ID 列がありません", i+1)
+		}
+		if _, dup := seen[row[0]]; dup {
+			return fmt.Errorf("tabletsv.RequireUniqueFirstColumn: ID %q の行が重複しています（%d 件目のレコード）。1 つの ID に 1 行だけにしてください", row[0], i+1)
+		}
+		seen[row[0]] = struct{}{}
+	}
+	return nil
 }
 
 func ParseTable(r io.Reader) (*Table, error) {

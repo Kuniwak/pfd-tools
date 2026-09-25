@@ -7,6 +7,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/pfd"
 )
 
+var ErrCycleRemains = errors.New("フィードバック辺を除いても循環が残っています（不変条件 acyclic-except-fb 違反）")
+
 type CellError struct {
 	Locations []DrawIOLocation
 	Wrapped   error
@@ -70,6 +72,7 @@ func NewCellErrorsByPFDErrors(errs pfd.Errors, srcMap *SourceMap) CellErrors {
 
 func (e CellErrors) Error() string {
 	if len(e) == 0 {
+
 		panic("pfddrawio.CellErrors: empty")
 	}
 

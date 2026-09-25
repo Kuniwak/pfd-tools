@@ -5,13 +5,17 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/Kuniwak/pfd-tools/cli"
+	"github.com/Kuniwak/pfd-tools/perf"
 	"github.com/Kuniwak/pfd-tools/slograw"
 	"github.com/Kuniwak/pfd-tools/sugar"
 	"github.com/Kuniwak/pfd-tools/tools"
 	"github.com/Kuniwak/pfd-tools/version"
 )
+
+const ShortHelp = "PFD と環境から実行計画（ガントチャート）を探索します。"
 
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	options, err := ParseOptions(args, inout)
@@ -30,10 +34,21 @@ func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 	if options.CommonOptions.Help {
 		return nil
 	}
+
+	if options.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
+		return nil
+	}
 	if options.CommonOptions.Version {
 		fmt.Fprintln(inout.Stdout, version.Version)
 		return nil
 	}
+
+	prof, err := perf.StartWithSignalHandler(options.CPUProfilePath, options.MemProfilePath, func() { os.Exit(130) }, os.Interrupt, syscall.SIGTERM)
+	if err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	}
+	defer func() { _ = prof.Stop() }()
 
 	logger := slog.New(slograw.NewHandler(inout.Stderr, options.CommonOptions.LogLevel))
 

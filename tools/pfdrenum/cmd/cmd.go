@@ -1,18 +1,21 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 
 	"github.com/Kuniwak/pfd-tools/cli"
+	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/pfdencoding/pfddrawio"
 	"github.com/Kuniwak/pfd-tools/pfd/pfdencoding/pfdfmt"
-	"github.com/Kuniwak/pfd-tools/pfd/pfdencoding/pfddrawiopng"
+	"github.com/Kuniwak/pfd-tools/pfd/pfdtable/encoding/pfdtsv"
 	"github.com/Kuniwak/pfd-tools/slograw"
+	"github.com/Kuniwak/pfd-tools/tools"
 	"github.com/Kuniwak/pfd-tools/version"
 )
+
+const ShortHelp = "PFD の要素を採番します。既存の ID は維持されます。"
 
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
@@ -27,8 +30,21 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	return 0
 }
 
+func NewRenumberBase(opts *Options) pfd.RenumberBase {
+	return pfd.RenumberBase{
+		Plan:                 opts.RenumberPlan,
+		MaxProcessNumber:     opts.MaxProcessNumber,
+		MaxDeliverableNumber: opts.MaxDeliverableNumber,
+	}
+}
+
 func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	if opts.CommonOptions.Help {
+		return nil
+	}
+
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 
@@ -39,52 +55,69 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 	logger := slog.New(slograw.NewHandler(inout.Stderr, opts.CommonOptions.LogLevel))
 
-	f, r, err := pfdfmt.Detect(opts.Reader)
+	input, err := io.ReadAll(opts.Reader)
 	if err != nil {
 		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}
 
-	logger.Debug("detected format", "format", f)
+	if opts.Mode == ModeEmitMaxID {
+		nodes, err := pfdfmt.ReadDrawioNodes(input, logger)
+		if err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		}
 
-	switch f {
-	case pfdfmt.FormatDrawio:
-		nodes, err := pfddrawio.Renumber(r, logger)
+		maxProcessNumber, maxDeliverableNumber := pfddrawio.MaxNumberedIDs(nodes, logger)
+
+		if _, err := fmt.Fprintln(inout.Stdout, pfd.FormatMaxIDs(maxProcessNumber, maxDeliverableNumber)); err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		}
+
+		return nil
+	}
+
+	if opts.Mode == ModeEmitPlan || opts.Mode == ModeExtendPlan {
+
+		if opts.Inplace {
+			return fmt.Errorf("cmd.MainCommandByOptions: the renumber plan cannot be written in place")
+		}
+
+		nodes, err := pfdfmt.ReadDrawioNodes(input, logger)
 		if err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
-		for _, node := range nodes {
-			if err := node.Write(opts.Writer); err != nil {
-				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-			}
-		}
-	case pfdfmt.FormatDrawioPNG:
-		pngBytes, err := io.ReadAll(r)
+
+		base := NewRenumberBase(opts)
+
+		plan, err := pfddrawio.NewRenumberPlanWithBase(nodes, base, logger)
 		if err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
-		xmlReader, err := pfddrawiopng.ExtractMxfile(bytes.NewReader(pngBytes))
-		if err != nil {
+
+		out := pfd.MergeRenumberPlans(base.Plan, plan.NewlyNumbered())
+
+		if err := pfdtsv.WriteRenumberPlan(inout.Stdout, out); err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
-		nodes, err := pfddrawio.Renumber(xmlReader, logger)
-		if err != nil {
-			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
-		xmlBuf := bytes.NewBuffer(nil)
-		for _, node := range nodes {
-			if err := node.Write(xmlBuf); err != nil {
-				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-			}
-		}
-		out, err := pfddrawiopng.ReplaceMxfile(pngBytes, xmlBuf.Bytes())
-		if err != nil {
-			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
-		if _, err := opts.Writer.Write(out); err != nil {
-			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
-	default:
-		return fmt.Errorf("cmd.MainCommandByOptions: not supported format: %q", f)
+
+		return nil
+	}
+
+	transform := pfddrawio.RenumberWithBase(NewRenumberBase(opts))
+	if opts.Mode == ModeApplyPlan {
+		transform = pfddrawio.RenumberByPlan(opts.RenumberPlan)
+	}
+
+	out, err := pfdfmt.TransformDrawioBytes(input, transform, logger)
+	if err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	}
+
+	inplacePath := ""
+	if opts.Inplace {
+		inplacePath = opts.InputFilePath
+	}
+	if err := tools.WriteOutput(inout.Stdout, inplacePath, out); err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}
 
 	return nil

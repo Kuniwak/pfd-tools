@@ -15,11 +15,12 @@ var ConsistentOutputComp = checkers.AtomicChecker[pfdcommon.Target]{
 	CheckFunc: func(t pfdcommon.Target, ch chan<- checkers.Problem) error {
 		const problemID = "consistent-output-comp"
 		for comp, ps := range t.PFD.ProcessComposition {
-			actualOutputs := t.Memoized.EdgeMap[comp]
+
+			actualOutputs := t.PFD.ExpandCompositeDeliverables(t.Memoized.EdgeMap[comp])
 
 			expectedOutputs := sets.New(pfd.NodeID.Compare)
 			for _, p1 := range ps.Iter() {
-				outputs1 := t.PFD.OutputsIncludingFeedback(p1)
+				outputs1 := t.PFD.ExpandCompositeDeliverables(t.PFD.OutputsIncludingFeedback(p1))
 				expectedOutputs.Union(pfd.NodeID.Compare, outputs1)
 			}
 

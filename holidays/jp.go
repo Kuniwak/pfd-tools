@@ -1,27 +1,5 @@
 package holidays
 
-// MIT License
-//
-// Copyright (c) 2024 YutaKato
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in allcheckers
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 import (
 	"time"
 
@@ -29,11 +7,10 @@ import (
 )
 
 func JPHolidays() *sets.Set[time.Time] {
-	if time.Now().Year() < 2000 || time.Now().Year() > 2026 {
+	if time.Now().Year() < 2000 || time.Now().Year() > 2027 {
 		panic("JPHolidays: year is out of range")
 	}
 
-	// Based on holiday from https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv.
 	syukujitsuCSV := map[string]string{
 		"2000-01-01": "元日",
 		"2000-01-10": "成人の日",
@@ -504,6 +481,23 @@ func JPHolidays() *sets.Set[time.Time] {
 		"2026-10-12": "スポーツの日",
 		"2026-11-03": "文化の日",
 		"2026-11-23": "勤労感謝の日",
+		"2027-01-01": "元日",
+		"2027-01-11": "成人の日",
+		"2027-02-11": "建国記念の日",
+		"2027-02-23": "天皇誕生日",
+		"2027-03-21": "春分の日",
+		"2027-03-22": "休日",
+		"2027-04-29": "昭和の日",
+		"2027-05-03": "憲法記念日",
+		"2027-05-04": "みどりの日",
+		"2027-05-05": "こどもの日",
+		"2027-07-19": "海の日",
+		"2027-08-11": "山の日",
+		"2027-09-20": "敬老の日",
+		"2027-09-23": "秋分の日",
+		"2027-10-11": "スポーツの日",
+		"2027-11-03": "文化の日",
+		"2027-11-23": "勤労感謝の日",
 	}
 
 	s := sets.New(time.Time.Compare)

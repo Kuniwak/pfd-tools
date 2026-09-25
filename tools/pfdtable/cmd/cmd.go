@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
+	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/Kuniwak/pfd-tools/cli"
@@ -16,8 +17,11 @@ import (
 	pfdtableencoding "github.com/Kuniwak/pfd-tools/pfd/pfdtable/encoding"
 	"github.com/Kuniwak/pfd-tools/pfd/pfdtable/encoding/pfdtsv"
 	"github.com/Kuniwak/pfd-tools/slograw"
+	"github.com/Kuniwak/pfd-tools/tools"
 	"github.com/Kuniwak/pfd-tools/version"
 )
+
+const ShortHelp = "PFD から要素表を作成します。要素表の更新も可能です。"
 
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
@@ -37,6 +41,11 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 		return nil
 	}
 
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
+		return nil
+	}
+
 	if opts.CommonOptions.Version {
 		_, _ = fmt.Fprintln(inout.Stdout, version.Version)
 		return nil
@@ -44,6 +53,20 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 	logger := slog.New(slograw.NewHandler(inout.Stderr, opts.CommonOptions.LogLevel))
 
+	if opts.InplaceOutputPath == "" {
+		return mainCommandTable(opts, inout.Stdout, logger)
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := mainCommandTable(opts, buf, logger); err != nil {
+		return err
+	}
+	if err := tools.WriteOutput(inout.Stdout, opts.InplaceOutputPath, buf.Bytes()); err != nil {
+		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+	}
+	return nil
+}
+
+func mainCommandTable(opts *Options, w io.Writer, logger *slog.Logger) error {
 	switch opts.TableCategory {
 	case TableCategoryPFD:
 		switch opts.PFDTableType {
@@ -52,13 +75,9 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: missing pfd")
 			}
 
-			var cdTable *pfd.CompositeDeliverableTable
-			if opts.HasCompositeDeliverableTable {
-				var err error
-				cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-				if err != nil {
-					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-				}
+			cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 
 			p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
@@ -87,15 +106,15 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				}
 
 				processTable.Refresh(p, nodeMap)
-				pfdtable.EnsureAPExtraHeaders(processTable, opts.Mode, opts.CommonOptions.Locale)
+				pfdtable.EnsureAPExtraHeaders(processTable, opts.Mode, opts.Model, opts.CommonOptions.Locale)
 
-				if err := tableWriter(opts.Writer, processTable); err != nil {
+				if err := tableWriter(w, processTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			} else {
 				processTable := pfd.NewAtomicProcessTable(p, nodeMap)
-				pfdtable.ApplyAPMode(processTable, opts.Mode, opts.CommonOptions.Locale)
-				if err := tableWriter(opts.Writer, processTable); err != nil {
+				pfdtable.ApplyAPMode(processTable, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+				if err := tableWriter(w, processTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			}
@@ -106,13 +125,9 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: missing pfd")
 			}
 
-			var cdTable *pfd.CompositeDeliverableTable
-			if opts.HasCompositeDeliverableTable {
-				var err error
-				cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-				if err != nil {
-					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-				}
+			cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 
 			p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
@@ -141,15 +156,15 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				}
 
 				deliverableTable.Refresh(p, nodeMap)
-				pfdtable.EnsureADExtraHeaders(deliverableTable, opts.Mode, opts.CommonOptions.Locale)
+				pfdtable.EnsureADExtraHeaders(deliverableTable, opts.Mode, opts.Model, opts.CommonOptions.Locale)
 
-				if err := tableWriter(opts.Writer, deliverableTable); err != nil {
+				if err := tableWriter(w, deliverableTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			} else {
 				deliverableTable := pfd.NewAtomicDeliverableTable(p, nodeMap)
-				pfdtable.ApplyADMode(deliverableTable, opts.Mode, opts.CommonOptions.Locale)
-				if err := tableWriter(opts.Writer, deliverableTable); err != nil {
+				pfdtable.ApplyADMode(deliverableTable, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+				if err := tableWriter(w, deliverableTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			}
@@ -160,13 +175,9 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: missing pfd")
 			}
 
-			var cdTable *pfd.CompositeDeliverableTable
-			if opts.HasCompositeDeliverableTable {
-				var err error
-				cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-				if err != nil {
-					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-				}
+			cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 
 			p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
@@ -196,12 +207,12 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 				compositeProcessTable.Refresh(p, nodeMap)
 
-				if err := tableWriter(opts.Writer, compositeProcessTable); err != nil {
+				if err := tableWriter(w, compositeProcessTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			} else {
 				compositeProcessTable := pfd.NewCompositeProcessTable(p, nodeMap)
-				if err := tableWriter(opts.Writer, compositeProcessTable); err != nil {
+				if err := tableWriter(w, compositeProcessTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			}
@@ -215,18 +226,15 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 			if !opts.HasPFD {
 				emptyTable := &pfd.CompositeDeliverableTable{ExtraHeaders: []string{}, Rows: []*pfd.CompositeDeliverableRow{}}
-				if err := tableWriter(opts.Writer, emptyTable); err != nil {
+				if err := tableWriter(w, emptyTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 				return nil
 			}
 
-			var cdTable *pfd.CompositeDeliverableTable
-			if opts.HasCompositeDeliverableTable {
-				cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-				if err != nil {
-					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-				}
+			cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 			p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
 				CompositeDeliverableTable: cdTable,
@@ -250,12 +258,12 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 				compositeDeliverableTable.Refresh(p, nodeMap)
 
-				if err := tableWriter(opts.Writer, compositeDeliverableTable); err != nil {
+				if err := tableWriter(w, compositeDeliverableTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			} else {
 				compositeDeliverableTable := pfd.NewCompositeDeliverableTable(p, nodeMap)
-				if err := tableWriter(opts.Writer, compositeDeliverableTable); err != nil {
+				if err := tableWriter(w, compositeDeliverableTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			}
@@ -271,13 +279,9 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: missing pfd")
 			}
 
-			var cdTable *pfd.CompositeDeliverableTable
-			if opts.HasCompositeDeliverableTable {
-				var err error
-				cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-				if err != nil {
-					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-				}
+			cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 
 			p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
@@ -322,12 +326,12 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 				resourceTable.Refresh(p.AtomicProcesses(), nodeMap, neededResourceSetsFunc)
 
-				if err := tableWriter(opts.Writer, resourceTable); err != nil {
+				if err := tableWriter(w, resourceTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			} else {
 				resourceTable := fsmtable.NewResourceTableByAtomicProcessTable(apTable, neededResourceSetsFunc)
-				if err := tableWriter(opts.Writer, resourceTable); err != nil {
+				if err := tableWriter(w, resourceTable); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 			}
@@ -339,7 +343,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 			if opts.AtomicProcessTableReader == nil {
-				if err := tableWriter(opts.Writer, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}}); err != nil {
+				if err := tableWriter(w, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}}); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 				return nil
@@ -352,7 +356,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 			if err != nil {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
-			if err := tableWriter(opts.Writer, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable)); err != nil {
+			if err := tableWriter(w, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable)); err != nil {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 			return nil
@@ -363,7 +367,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 			if opts.AtomicProcessTableReader == nil {
-				if err := tableWriter(opts.Writer, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}}); err != nil {
+				if err := tableWriter(w, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}}); err != nil {
 					return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 				}
 				return nil
@@ -376,7 +380,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 			if err != nil {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
-			if err := tableWriter(opts.Writer, fsmtable.NewGroupTableByAtomicProcessTable(apTable)); err != nil {
+			if err := tableWriter(w, fsmtable.NewGroupTableByAtomicProcessTable(apTable)); err != nil {
 				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 			}
 			return nil
@@ -389,15 +393,9 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 			return fmt.Errorf("cmd.MainCommandByOptions: missing pfd for -t all")
 		}
 
-		var cdTable *pfd.CompositeDeliverableTable
-		if opts.HasCompositeDeliverableTable {
-			var err error
-			cdTable, err = pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
-			if err != nil {
-				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-			}
-		} else {
-			cdTable = &pfd.CompositeDeliverableTable{ExtraHeaders: []string{}, Rows: []*pfd.CompositeDeliverableRow{}}
+		cdTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
+		if err != nil {
+			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
 
 		p, err := pfdfmt.Parse("", opts.PFDReader, &pfdfmt.ParseOptions{
@@ -409,9 +407,6 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 		nodeMap := pfd.NewNodeMap(p.Nodes, logger)
 
-		// When existing tables are provided via project.json, refresh each table in place
-		// or write to the output directory. Milestone and group tables have no Refresh method
-		// and are always derived fresh from the AP table.
 		if opts.AllExisting != nil {
 			if err := mainCommandAllRefresh(opts, p, nodeMap, logger); err != nil {
 				return err
@@ -421,7 +416,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 		type tableFile struct {
 			name  string
-			write func(f *os.File) error
+			write func(out io.Writer) error
 		}
 
 		var apTable *pfd.AtomicProcessTable
@@ -436,113 +431,97 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 			}
 		}
 
+		layout := tools.DefaultProjectLayout("")
 		tables := []tableFile{
-			{"ap.tsv", func(f *os.File) error {
+			{layout.AtomicProcessTable, func(out io.Writer) error {
 				w, err := pfdtableencoding.NewAtomicProcessTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
 				t := pfd.NewAtomicProcessTable(p, nodeMap)
-				pfdtable.ApplyAPMode(t, opts.Mode, opts.CommonOptions.Locale)
-				return w(f, t)
+				pfdtable.ApplyAPMode(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+				return w(out, t)
 			}},
-			{"ad.tsv", func(f *os.File) error {
+			{layout.AtomicDeliverableTable, func(out io.Writer) error {
 				w, err := pfdtableencoding.NewAtomicDeliverableTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
 				t := pfd.NewAtomicDeliverableTable(p, nodeMap)
-				pfdtable.ApplyADMode(t, opts.Mode, opts.CommonOptions.Locale)
-				return w(f, t)
+				pfdtable.ApplyADMode(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+				return w(out, t)
 			}},
-			{"cd.tsv", func(f *os.File) error {
+			{layout.CompositeDeliverableTable, func(out io.Writer) error {
 				w, err := pfdtableencoding.NewCompositeDeliverableTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
-				return w(f, pfd.NewCompositeDeliverableTable(p, nodeMap))
+				return w(out, pfd.NewCompositeDeliverableTable(p, nodeMap))
 			}},
-			{"r.tsv", func(f *os.File) error {
+			{layout.ResourceTable, func(out io.Writer) error {
 				w, err := fsmtableencoding.NewResourceTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
 				if apTable == nil {
-					return w(f, &fsmtable.ResourceTable{ExtraHeaders: []string{}, Rows: []*fsmtable.ResourceTableRow{}})
+					return w(out, &fsmtable.ResourceTable{ExtraHeaders: []string{}, Rows: []*fsmtable.ResourceTableRow{}})
 				}
 				neededResourceSetsFunc, err := fsmtable.NeededResourcesSetFuncByTable(apTable, fsmtable.DefaultNeededResourceSetsColumnSelectFunc)
 				if err != nil {
 					return err
 				}
-				return w(f, fsmtable.NewResourceTableByAtomicProcessTable(apTable, neededResourceSetsFunc))
+				return w(out, fsmtable.NewResourceTableByAtomicProcessTable(apTable, neededResourceSetsFunc))
 			}},
-			{"m.tsv", func(f *os.File) error {
+			{layout.MilestoneTable, func(out io.Writer) error {
 				w, err := fsmtableencoding.NewMilestoneTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
 				if apTable == nil {
-					return w(f, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}})
+					return w(out, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}})
 				}
-				return w(f, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable))
+				return w(out, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable))
 			}},
-			{"g.tsv", func(f *os.File) error {
+			{layout.GroupTable, func(out io.Writer) error {
 				w, err := fsmtableencoding.NewGroupTableWriter(opts.OutputFormat)
 				if err != nil {
 					return err
 				}
 				if apTable == nil {
-					return w(f, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}})
+					return w(out, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}})
 				}
-				return w(f, fsmtable.NewGroupTableByAtomicProcessTable(apTable))
+				return w(out, fsmtable.NewGroupTableByAtomicProcessTable(apTable))
 			}},
 		}
 
-		for _, tf := range tables {
-			outPath := filepath.Join(opts.OutDir, tf.name)
-			f, err := os.Create(outPath)
-			if err != nil {
-				return fmt.Errorf("cmd.MainCommandByOptions: creating %s: %w", tf.name, err)
+		if opts.Model.Resource == execmodel.ResourceModeInfinite {
+			kept := make([]tableFile, 0, len(tables))
+			for _, tf := range tables {
+				if tf.name == layout.ResourceTable {
+					continue
+				}
+				kept = append(kept, tf)
 			}
-			if err := tf.write(f); err != nil {
-				f.Close()
-				return fmt.Errorf("cmd.MainCommandByOptions: writing %s: %w", tf.name, err)
-			}
-			f.Close()
+			tables = kept
 		}
 
-		absOutDir, err := filepath.Abs(opts.OutDir)
+		outputs := make([]tools.FileOutput, 0, len(tables)+1)
+		for _, tf := range tables {
+			output, err := tools.BuildFileOutput(filepath.Join(opts.OutDir, tf.name), tf.write)
+			if err != nil {
+				return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+			}
+			outputs = append(outputs, output)
+		}
+
+		projectJSON, err := buildProjectJSON(opts.OutDir, opts.PFDPath, opts.Model)
 		if err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 		}
-		relPFDPath, err := filepath.Rel(absOutDir, opts.PFDPath)
-		if err != nil {
+		outputs = append(outputs, projectJSON)
+
+		if err := tools.WriteFiles(outputs); err != nil {
 			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
-		projectConfig := struct {
-			PFD                       string `json:"pfd"`
-			AtomicProcessTable        string `json:"atomic_process_table"`
-			AtomicDeliverableTable    string `json:"atomic_deliverable_table"`
-			CompositeDeliverableTable string `json:"composite_deliverable_table"`
-			ResourceTable             string `json:"resource_table"`
-			MilestoneTable            string `json:"milestone_table"`
-			GroupTable                string `json:"group_table"`
-		}{
-			PFD:                       relPFDPath,
-			AtomicProcessTable:        "ap.tsv",
-			AtomicDeliverableTable:    "ad.tsv",
-			CompositeDeliverableTable: "cd.tsv",
-			ResourceTable:             "r.tsv",
-			MilestoneTable:            "m.tsv",
-			GroupTable:                "g.tsv",
-		}
-		configJSON, err := json.MarshalIndent(projectConfig, "", "\t")
-		if err != nil {
-			return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
-		configPath := filepath.Join(opts.OutDir, "project.json")
-		if err := os.WriteFile(configPath, append(configJSON, '\n'), 0644); err != nil {
-			return fmt.Errorf("cmd.MainCommandByOptions: writing project.json: %w", err)
 		}
 
 		return nil
@@ -552,11 +531,8 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	}
 }
 
-// mainCommandAllRefresh handles -t all with an existing project.json.
-// Each table is refreshed from the existing data (or generated fresh if absent),
-// then written to the inplace path or the output directory.
-// project.json is regenerated only when writing to -out-dir, not on -inplace.
 func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pfd.Node, logger *slog.Logger) error {
+	layout := tools.DefaultProjectLayout("")
 	ae := opts.AllExisting
 	outPath := func(key, filename string) string {
 		if opts.IsInplace {
@@ -568,22 +544,16 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 		return filepath.Join(opts.OutDir, filename)
 	}
 
-	writeToPath := func(path string, write func(f *os.File) error) error {
-		if path == "" {
-			return nil
-		}
-		f, err := os.Create(path)
+	outputs := make([]tools.FileOutput, 0, len(opts.InplaceTargets)+1)
+	buildToPath := func(path string, write func(out io.Writer) error) error {
+		output, err := tools.BuildFileOutput(path, write)
 		if err != nil {
-			return fmt.Errorf("cmd.mainCommandAllRefresh: creating %s: %w", path, err)
+			return fmt.Errorf("cmd.mainCommandAllRefresh: %w", err)
 		}
-		if err := write(f); err != nil {
-			f.Close()
-			return fmt.Errorf("cmd.mainCommandAllRefresh: writing %s: %w", path, err)
-		}
-		return f.Close()
+		outputs = append(outputs, output)
+		return nil
 	}
 
-	// Parse the AP table used for resource/milestone/group derivation.
 	var apTable *pfd.AtomicProcessTable
 	if opts.AtomicProcessTableReader != nil {
 		apTableParser, err := pfdtableencoding.NewAtomicProcessTableParser(opts.InputFormat)
@@ -596,8 +566,7 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 		}
 	}
 
-	// AP
-	if err := writeToPath(outPath("ap", "ap.tsv"), func(f *os.File) error {
+	if err := buildToPath(outPath("ap", layout.AtomicProcessTable), func(out io.Writer) error {
 		w, err := pfdtableencoding.NewAtomicProcessTableWriter(opts.OutputFormat)
 		if err != nil {
 			return err
@@ -612,18 +581,17 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 				return err
 			}
 			t.Refresh(p, nodeMap)
-			pfdtable.EnsureAPExtraHeaders(t, opts.Mode, opts.CommonOptions.Locale)
-			return w(f, t)
+			pfdtable.EnsureAPExtraHeaders(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+			return w(out, t)
 		}
 		t := pfd.NewAtomicProcessTable(p, nodeMap)
-		pfdtable.ApplyAPMode(t, opts.Mode, opts.CommonOptions.Locale)
-		return w(f, t)
+		pfdtable.ApplyAPMode(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+		return w(out, t)
 	}); err != nil {
 		return err
 	}
 
-	// AD
-	if err := writeToPath(outPath("ad", "ad.tsv"), func(f *os.File) error {
+	if err := buildToPath(outPath("ad", layout.AtomicDeliverableTable), func(out io.Writer) error {
 		w, err := pfdtableencoding.NewAtomicDeliverableTableWriter(opts.OutputFormat)
 		if err != nil {
 			return err
@@ -638,18 +606,17 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 				return err
 			}
 			t.Refresh(p, nodeMap)
-			pfdtable.EnsureADExtraHeaders(t, opts.Mode, opts.CommonOptions.Locale)
-			return w(f, t)
+			pfdtable.EnsureADExtraHeaders(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+			return w(out, t)
 		}
 		t := pfd.NewAtomicDeliverableTable(p, nodeMap)
-		pfdtable.ApplyADMode(t, opts.Mode, opts.CommonOptions.Locale)
-		return w(f, t)
+		pfdtable.ApplyADMode(t, opts.Mode, opts.Model, opts.CommonOptions.Locale)
+		return w(out, t)
 	}); err != nil {
 		return err
 	}
 
-	// CD
-	if err := writeToPath(outPath("cd", "cd.tsv"), func(f *os.File) error {
+	if err := buildToPath(outPath("cd", layout.CompositeDeliverableTable), func(out io.Writer) error {
 		w, err := pfdtableencoding.NewCompositeDeliverableTableWriter(opts.OutputFormat)
 		if err != nil {
 			return err
@@ -664,26 +631,43 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 				return err
 			}
 			t.Refresh(p, nodeMap)
-			return w(f, t)
+			return w(out, t)
 		}
-		return w(f, pfd.NewCompositeDeliverableTable(p, nodeMap))
+		return w(out, pfd.NewCompositeDeliverableTable(p, nodeMap))
 	}); err != nil {
 		return err
 	}
 
-	// R (resource)
-	if err := writeToPath(outPath("r", "r.tsv"), func(f *os.File) error {
-		w, err := fsmtableencoding.NewResourceTableWriter(opts.OutputFormat)
-		if err != nil {
-			return err
-		}
-		empty := &fsmtable.ResourceTable{ExtraHeaders: []string{}, Rows: []*fsmtable.ResourceTableRow{}}
-		if apTable == nil {
-			return w(f, empty)
-		}
-		hasResourcesCol := fsmtable.DefaultNeededResourceSetsColumnSelectFunc(apTable.ExtraHeaders) >= 0
-		if !hasResourcesCol {
-			// AP is OUTPUT format (no needed-resources column); preserve existing R or write empty.
+	if opts.Model.Resource == execmodel.ResourceModeFinite || ae.R != nil {
+		if err := buildToPath(outPath("r", layout.ResourceTable), func(out io.Writer) error {
+			w, err := fsmtableencoding.NewResourceTableWriter(opts.OutputFormat)
+			if err != nil {
+				return err
+			}
+			empty := &fsmtable.ResourceTable{ExtraHeaders: []string{}, Rows: []*fsmtable.ResourceTableRow{}}
+			if apTable == nil {
+				return w(out, empty)
+			}
+			hasResourcesCol := fsmtable.DefaultNeededResourceSetsColumnSelectFunc(apTable.ExtraHeaders) >= 0
+			if !hasResourcesCol {
+
+				if ae.R != nil {
+					parser, err := fsmtableencoding.NewResourceTableParser(opts.InputFormat)
+					if err != nil {
+						return err
+					}
+					t, err := parser(ae.R)
+					if err != nil {
+						return err
+					}
+					return w(out, t)
+				}
+				return w(out, empty)
+			}
+			neededResourceSetsFunc, err := fsmtable.NeededResourcesSetFuncByTable(apTable, fsmtable.DefaultNeededResourceSetsColumnSelectFunc)
+			if err != nil {
+				return err
+			}
 			if ae.R != nil {
 				parser, err := fsmtableencoding.NewResourceTableParser(opts.InputFormat)
 				if err != nil {
@@ -693,95 +677,70 @@ func mainCommandAllRefresh(opts *Options, p *pfd.PFD, nodeMap map[pfd.NodeID]*pf
 				if err != nil {
 					return err
 				}
-				return w(f, t)
+				t.Refresh(p.AtomicProcesses(), nodeMap, neededResourceSetsFunc)
+				return w(out, t)
 			}
-			return w(f, empty)
-		}
-		neededResourceSetsFunc, err := fsmtable.NeededResourcesSetFuncByTable(apTable, fsmtable.DefaultNeededResourceSetsColumnSelectFunc)
-		if err != nil {
+			return w(out, fsmtable.NewResourceTableByAtomicProcessTable(apTable, neededResourceSetsFunc))
+		}); err != nil {
 			return err
 		}
-		if ae.R != nil {
-			parser, err := fsmtableencoding.NewResourceTableParser(opts.InputFormat)
-			if err != nil {
-				return err
-			}
-			t, err := parser(ae.R)
-			if err != nil {
-				return err
-			}
-			t.Refresh(p.AtomicProcesses(), nodeMap, neededResourceSetsFunc)
-			return w(f, t)
-		}
-		return w(f, fsmtable.NewResourceTableByAtomicProcessTable(apTable, neededResourceSetsFunc))
-	}); err != nil {
-		return err
 	}
 
-	// M (milestone) — always derived fresh from AP; no Refresh method.
-	if err := writeToPath(outPath("m", "m.tsv"), func(f *os.File) error {
+	if err := buildToPath(outPath("m", layout.MilestoneTable), func(out io.Writer) error {
 		w, err := fsmtableencoding.NewMilestoneTableWriter(opts.OutputFormat)
 		if err != nil {
 			return err
 		}
 		if apTable == nil {
-			return w(f, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}})
+			return w(out, &fsmtable.MilestoneTable{ExtraHeaders: []string{}, Rows: []*fsmtable.MilestoneTableRow{}})
 		}
-		return w(f, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable))
+		return w(out, fsmtable.NewMilestoneTableByAtomicProcessTable(apTable))
 	}); err != nil {
 		return err
 	}
 
-	// G (group) — always derived fresh from AP; no Refresh method.
-	if err := writeToPath(outPath("g", "g.tsv"), func(f *os.File) error {
+	if err := buildToPath(outPath("g", layout.GroupTable), func(out io.Writer) error {
 		w, err := fsmtableencoding.NewGroupTableWriter(opts.OutputFormat)
 		if err != nil {
 			return err
 		}
 		if apTable == nil {
-			return w(f, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}})
+			return w(out, &fsmtable.GroupTable{ExtraHeaders: []string{}, Rows: []*fsmtable.GroupTableRow{}})
 		}
-		return w(f, fsmtable.NewGroupTableByAtomicProcessTable(apTable))
+		return w(out, fsmtable.NewGroupTableByAtomicProcessTable(apTable))
 	}); err != nil {
 		return err
 	}
 
-	// Regenerate project.json only when writing to -out-dir (not -inplace).
 	if !opts.IsInplace {
-		absOutDir, err := filepath.Abs(opts.OutDir)
+		projectJSON, err := buildProjectJSON(opts.OutDir, opts.PFDPath, opts.Model)
 		if err != nil {
 			return fmt.Errorf("cmd.mainCommandAllRefresh: %w", err)
 		}
-		relPFDPath, err := filepath.Rel(absOutDir, opts.PFDPath)
-		if err != nil {
-			return fmt.Errorf("cmd.mainCommandAllRefresh: %w", err)
-		}
-		projectConfig := struct {
-			PFD                       string `json:"pfd"`
-			AtomicProcessTable        string `json:"atomic_process_table"`
-			AtomicDeliverableTable    string `json:"atomic_deliverable_table"`
-			CompositeDeliverableTable string `json:"composite_deliverable_table"`
-			ResourceTable             string `json:"resource_table"`
-			MilestoneTable            string `json:"milestone_table"`
-			GroupTable                string `json:"group_table"`
-		}{
-			PFD:                       relPFDPath,
-			AtomicProcessTable:        "ap.tsv",
-			AtomicDeliverableTable:    "ad.tsv",
-			CompositeDeliverableTable: "cd.tsv",
-			ResourceTable:             "r.tsv",
-			MilestoneTable:            "m.tsv",
-			GroupTable:                "g.tsv",
-		}
-		configJSON, err := json.MarshalIndent(projectConfig, "", "\t")
-		if err != nil {
-			return fmt.Errorf("cmd.mainCommandAllRefresh: %w", err)
-		}
-		configPath := filepath.Join(opts.OutDir, "project.json")
-		if err := os.WriteFile(configPath, append(configJSON, '\n'), 0644); err != nil {
-			return fmt.Errorf("cmd.mainCommandAllRefresh: writing project.json: %w", err)
-		}
+		outputs = append(outputs, projectJSON)
+	}
+
+	if err := tools.WriteFiles(outputs); err != nil {
+		return fmt.Errorf("cmd.mainCommandAllRefresh: %w", err)
 	}
 
 	return nil
+}
+
+func buildProjectJSON(outDir string, pfdPath string, model execmodel.Model) (tools.FileOutput, error) {
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return tools.FileOutput{}, fmt.Errorf("cmd.buildProjectJSON: %w", err)
+	}
+	relPFDPath, err := filepath.Rel(absOutDir, pfdPath)
+	if err != nil {
+		return tools.FileOutput{}, fmt.Errorf("cmd.buildProjectJSON: %w", err)
+	}
+
+	buf := &bytes.Buffer{}
+	if err := tools.WriteProjectJSON(buf, tools.DefaultProjectLayout(relPFDPath).FSMRawOptions(model)); err != nil {
+		return tools.FileOutput{}, fmt.Errorf("cmd.buildProjectJSON: %w", err)
+	}
+
+	return tools.FileOutput{Path: filepath.Join(outDir, "project.json"), Content: buf.Bytes()}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/sets"
@@ -89,7 +90,7 @@ func TestConsistentResourceTable(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(p, tc.AtomicProcessTable, nil, tc.ResourceTable, nil, nil, m, logger)
+				tgt := &fsmcommon.Target{PFD: p, AtomicProcessTable: tc.AtomicProcessTable, ResourceTable: tc.ResourceTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: logger}
 				if err := ConsistentResourceTable.Check(tgt, ch); err != nil {
 					t.Errorf("ConsistentResourceTable.Check: %v", err)
 				}

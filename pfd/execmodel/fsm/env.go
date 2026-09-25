@@ -14,43 +14,30 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// Env is the environment for the finite resource single deliverable execution model.
 type Env struct {
-	// PFD is the PFD.
 	PFD *pfd.ValidPFD
 
-	// AvailableResources is the set of available resources.
 	AvailableResources *sets.Set[ResourceID]
 
-	// AvailableAllocationsFunc is a function that enumerates and returns possible resource allocations in the given state.
 	AvailableAllocationsFunc AvailableAllocationsFunc
 
-	// InitialVolumeFunc is a function that provides the initial work volume for each atomic process.
 	InitialVolumeFunc InitialVolumeFunc
 
-	// ReworkVolumeFunc, when given the number of rework iterations for each atomic process, returns the work volume
-	// that is recovered when feedback edge deliverables are created or recreated.
 	ReworkVolumeFunc ReworkVolumeFunc
 
-	// FeedbackSourceMaxRevision returns the maximum revision for each feedback source deliverable.
 	FeedbackSourceMaxRevision map[pfd.AtomicDeliverableID]int
 
-	// PreconditionMap returns whether execution conditions are satisfied for each atomic process.
 	PreconditionMap map[pfd.AtomicProcessID]*Precondition
 
-	// NeededResourceSetsFunc is a function that provides the set of required resources for each atomic process.
 	NeededResourceSetsFunc NeededResourceSetsFunc
 
-	// DeliverableAvailableTimeFunc is a function that provides the available time for each deliverable.
 	DeliverableAvailableTimeFunc DeliverableAvailableTimeFunc
 
 	Memoized *Memoized
 
-	// Logger is the logger.
 	Logger *slog.Logger
 }
 
-// NewEnv returns a new environment.
 func NewEnv(
 	pfd *pfd.ValidPFD,
 	availableResources *sets.Set[ResourceID],
@@ -93,8 +80,6 @@ func (e *Env) Clone() *Env {
 	)
 }
 
-// FreeResources returns the free resources in the given state.
-// This is the available resources at the current time minus the allocated resources of atomic processes that are continuing execution.
 func (e *Env) FreeResources(state State) *sets.Set[ResourceID] {
 	avail := e.AvailableResources.Clone()
 	allocations := state.AllocationShouldContinue
@@ -104,11 +89,6 @@ func (e *Env) FreeResources(state State) *sets.Set[ResourceID] {
 	return avail
 }
 
-// AllocatabilityInfo returns whether resources can be allocated to an atomic process if resources can be occupied.
-// An atomic process is allocatable if it satisfies any of the following conditions:
-//
-// - Continuing execution
-// - All input deliverables of the atomic process have been generated, at least one input deliverable has been updated but not processed, remaining work volume is not 0, and start conditions are satisfied
 func (e *Env) AllocatabilityInfo(
 	ap pfd.AtomicProcessID,
 	remainedVolumeMap map[pfd.AtomicProcessID]Volume,
@@ -117,7 +97,7 @@ func (e *Env) AllocatabilityInfo(
 	updatedDeliverablesNotHandled map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID],
 ) *AllocatabilityInfo {
 	if _, ok := allocationShouldContinue[ap]; ok {
-		// NOTE: Atomic processes continuing execution are executable.
+
 		return &AllocatabilityInfo{Allocatability: AllocatabilityOKContinuable}
 	}
 
@@ -133,7 +113,7 @@ func (e *Env) AllocatabilityInfo(
 		}
 	}
 	if insufficientInputs.Len() > 0 {
-		// NOTE: Atomic processes with ungenerated input deliverables are not executable.
+
 		return &AllocatabilityInfo{
 			Allocatability:     AllocatabilityNGInsufficientInputs,
 			InsufficientInputs: insufficientInputs,
@@ -194,7 +174,6 @@ func (e *Env) AllocatabilityInfoMap(state State) AllocatabilityInfoMap {
 	return res
 }
 
-// NewlyAllocatables returns the set of atomic processes that are newly allocatable in the given state.
 func (e *Env) NewlyAllocatables(state State) *sets.Set[pfd.AtomicProcessID] {
 	res := sets.NewWithCapacity[pfd.AtomicProcessID](e.PFD.AtomicProcesses.Len())
 	for _, ap := range e.PFD.AtomicProcesses.Iter() {
@@ -203,7 +182,7 @@ func (e *Env) NewlyAllocatables(state State) *sets.Set[pfd.AtomicProcessID] {
 		case AllocatabilityOKStartable:
 			res.Add(pfd.AtomicProcessID.Compare, ap)
 		case AllocatabilityOKContinuable, AllocatabilityNGInsufficientInputs, AllocatabilityNGPreconditionNotMet, AllocatabilityNGNoDeliverableUpdates:
-			// Do nothing.
+
 		default:
 			panic(fmt.Sprintf("fsm.Env.NewlyAllocatables: unknown allocatability: %s", a))
 		}
@@ -218,11 +197,11 @@ func (e *Env) MinimumCompletedTime(currentTime execmodel.Time, remainedVolumeMap
 		if !ok {
 			panic(fmt.Sprintf("fsm.Env.MinimumCompletedTime: missing remained volume: %q", ap))
 		}
-		if remainedVolume.IsZero() {
-			panic(fmt.Sprintf("fsm.Env.MinimumCompletedTime: remained volume is zero: %q", ap))
-		}
 
-		restTime := execmodel.Time(float64(remainedVolume) / float64(alloc.ConsumedVolume))
+		restTime := execmodel.Time(0)
+		if !remainedVolume.IsZero() {
+			restTime = execmodel.Time(float64(remainedVolume) / float64(alloc.ConsumedVolume))
+		}
 		if restTime < minTime {
 			minTime = restTime
 		}
@@ -230,7 +209,6 @@ func (e *Env) MinimumCompletedTime(currentTime execmodel.Time, remainedVolumeMap
 	return currentTime + minTime, minTime != execmodel.Time(math.MaxFloat64)
 }
 
-// NewRevisionMap returns a new RevisionMap.
 func (e *Env) NewRevisionMap(
 	newlyAvailableInitialDeliverables *sets.Set[pfd.AtomicDeliverableID],
 	pastRevisionMap map[pfd.AtomicDeliverableID]int,
@@ -250,7 +228,6 @@ func (e *Env) NewRevisionMap(
 	return newRevisionMap, revisionsUpdated
 }
 
-// NewlyAvailableInitialDeliverables returns the set of initial deliverables that became newly available at the current time.
 func (e *Env) NewlyAvailableInitialDeliverables(t execmodel.Time) *sets.Set[pfd.AtomicDeliverableID] {
 	ids := sets.NewWithCapacity[pfd.AtomicDeliverableID](e.PFD.InitialDeliverables().Len())
 	for _, id := range e.PFD.InitialDeliverables().Iter() {
@@ -262,7 +239,6 @@ func (e *Env) NewlyAvailableInitialDeliverables(t execmodel.Time) *sets.Set[pfd.
 	return ids
 }
 
-// NewRemainedVolumeMap returns a new dictionary of remaining work time after reducing the remaining work time of atomic processes by the given allocation.
 func (e *Env) NewRemainedVolumeMap(remainedVolumeMap map[pfd.AtomicProcessID]Volume, allocation Allocation, timeDelta execmodel.Time) map[pfd.AtomicProcessID]Volume {
 	newRemainedVolumeMap := maps.Clone(remainedVolumeMap)
 
@@ -282,7 +258,6 @@ func (e *Env) NewRemainedVolumeMap(remainedVolumeMap map[pfd.AtomicProcessID]Vol
 	return newRemainedVolumeMap
 }
 
-// UpdateNumberOfReworksMap increments the execution completion count of completed atomic processes by one.
 func (e *Env) UpdateNumberOfReworksMap(
 	numberOfReworksMap map[pfd.AtomicProcessID]int,
 	completedAtomicProcesses *sets.Set[pfd.AtomicProcessID],
@@ -294,7 +269,6 @@ func (e *Env) UpdateNumberOfReworksMap(
 	return newNumOfReworksMap
 }
 
-// CollectCompletedAtomicProcesses finds completed atomic processes.
 func (e *Env) CollectCompletedAtomicProcesses(
 	allocation Allocation,
 	newRemainedVolumeMap map[pfd.AtomicProcessID]Volume,
@@ -311,7 +285,6 @@ func (e *Env) CollectCompletedAtomicProcesses(
 	}
 }
 
-// UpdatedDeliverables returns the set of deliverables that were updated from the set of atomic processes completed in this transition.
 func (e *Env) UpdatedDeliverables(completedAtomicProcesses *sets.Set[pfd.AtomicProcessID]) *sets.Set[pfd.AtomicDeliverableID] {
 	updatedDeliverables := sets.NewWithCapacity[pfd.AtomicDeliverableID](e.PFD.AtomicDeliverables.Len())
 
@@ -332,10 +305,10 @@ func (e *Env) NewUpdateDeliverablesNotHandled(
 	newUpdatedDeliverablesNotHandled := make(map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID], e.PFD.AtomicProcesses.Len())
 	for _, ap := range e.PFD.AtomicProcesses.Iter() {
 		if executedAtomicProcesses.Contains(pfd.AtomicProcessID.Compare, ap) {
-			// NOTE: Input deliverables have been processed.
+
 			newUpdatedDeliverablesNotHandled[ap] = sets.New(pfd.AtomicDeliverableID.Compare)
 		} else {
-			// NOTE: Input deliverables remain unprocessed.
+
 			newUpdatedDeliverablesNotHandled[ap] = pastUpdatedDeliverablesNotHandled[ap].Clone()
 		}
 	}
@@ -347,7 +320,7 @@ func (e *Env) NewUpdateDeliverablesNotHandled(
 	}
 
 	for _, ap := range completedAtomicProcesses.Iter() {
-		// NOTE: Among output deliverables, only mark as unprocessed those that are not feedback deliverables or feedback deliverables that have not reached the maximum revision.
+
 		for _, d := range e.PFD.OutputDeliverables(ap).Iter() {
 			curRevision, ok := newRevisionMap[d]
 			if !ok {
@@ -356,7 +329,7 @@ func (e *Env) NewUpdateDeliverablesNotHandled(
 
 			maxRevision, ok := e.FeedbackSourceMaxRevision[d]
 			if ok && curRevision >= maxRevision {
-				// NOTE: Feedback deliverables that have reached the maximum revision are not marked as unprocessed.
+
 				continue
 			}
 
@@ -368,7 +341,6 @@ func (e *Env) NewUpdateDeliverablesNotHandled(
 	return newUpdatedDeliverablesNotHandled
 }
 
-// InitialState returns the initial state.
 func (e *Env) InitialState() State {
 	t := execmodel.Time(0)
 
@@ -377,7 +349,6 @@ func (e *Env) InitialState() State {
 		numOfReworksMap[ap] = 0
 	}
 
-	// NOTE: There is no resource allocation in the initial state.
 	emptyAllocation := Allocation{}
 
 	newRevisionMap := make(map[pfd.AtomicDeliverableID]int, e.PFD.AtomicDeliverables.Len())
@@ -436,7 +407,6 @@ func (e *Env) nextTime(state State, allocation Allocation) (execmodel.Time, erro
 	}
 }
 
-// NextState returns the next state from the given state and allocation.
 func (e *Env) NextState(state State, allocation Allocation) (State, bool) {
 	nextTime, err := e.nextTime(state, allocation)
 	if err != nil {
@@ -508,7 +478,6 @@ func (e *Env) NextState(state State, allocation Allocation) (State, bool) {
 	), true
 }
 
-// Trans is a transition in the FSM.
 type Trans struct {
 	Allocation Allocation `json:"allocation"`
 	NextState  State      `json:"next_state"`
@@ -522,16 +491,19 @@ func CompareTrans(a, b *Trans) int {
 	return a.NextState.Compare(b.NextState)
 }
 
-// Transitions returns the set of transitions from the given state.
 func (e *Env) Transitions(state State) *sets.Set[*Trans] {
+	return e.TransitionsWith(state, e.AvailableAllocationsFunc)
+}
+
+func (e *Env) TransitionsWith(state State, availableAllocationsFunc AvailableAllocationsFunc) *sets.Set[*Trans] {
 	if e.IsCompleted(state) {
 		return sets.NewWithCapacity[*Trans](0)
 	}
 
 	newlyAllocatables := e.NewlyAllocatables(state)
-	allocations := e.AvailableAllocationsFunc(state, newlyAllocatables)
+	allocations := availableAllocationsFunc(state, newlyAllocatables)
 	if allocations.Len() == 0 {
-		// NOTE: If not in a completed state but no allocations exist, we need to wait for the completion of continuing processes or until the available time of initial deliverables.
+
 		_, err := e.nextTime(state, state.AllocationShouldContinue)
 		if err != nil {
 			sb := &strings.Builder{}
@@ -565,12 +537,11 @@ func (e *Env) Transitions(state State) *sets.Set[*Trans] {
 	return transitions
 }
 
-// IsCompleted returns whether the given state is completed.
 func (e *Env) IsCompleted(state State) bool {
-	// TODO(PROOF_NEEDED): From the initial state, any transition will eventually reach a completed state (otherwise the execution plan search will not stop).
+
 	for _, d := range e.PFD.InitialDeliverables().Iter() {
 		if state.Time < e.DeliverableAvailableTimeFunc(d) {
-			// NOTE: Not completed if the current time is not greater than or equal to the maximum available time of the deliverable.
+
 			return false
 		}
 	}
@@ -578,12 +549,12 @@ func (e *Env) IsCompleted(state State) bool {
 		a := e.Allocatability(ap, state.RemainedVolumeMap, state.RevisionMap, state.AllocationShouldContinue, state.UpdatedDeliverablesNotHandled)
 		switch a {
 		case AllocatabilityOKContinuable, AllocatabilityOKStartable:
-			// NOTE: Not completed because there are allocatable atomic processes.
+
 			return false
 		case AllocatabilityNGNoDeliverableUpdates:
-			// Do nothing.
+
 		case AllocatabilityNGInsufficientInputs, AllocatabilityNGPreconditionNotMet:
-			// NOTE: Not considered as execution completed state because there are processes that have not been executed or have not completed execution.
+
 			return false
 		default:
 			panic(fmt.Sprintf("fsm.Env.IsCompleted: unknown allocatability: %s", a))

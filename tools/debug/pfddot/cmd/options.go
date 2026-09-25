@@ -21,9 +21,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfddot", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfddot [options] -p <pfd> -cd <composite-deliverable-table>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfddot [options] -p <pfd> -cd <composite-deliverable-table>", ShortHelp)
 	}
 
 	var commonRawOptions tools.CommonRawOptions
@@ -46,6 +44,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -59,9 +60,12 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
-	compositeDeliverableTableReader, _, err := tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag, &compositeDeliverableTablePathLongFlag, cwd)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	var compositeDeliverableTableReader io.Reader
+	if compositeDeliverableTablePathShortFlag != "" || compositeDeliverableTablePathLongFlag != "" {
+		compositeDeliverableTableReader, _, err = tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag, &compositeDeliverableTablePathLongFlag, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
 	}
 
 	return &Options{CommonOptions: commonOptions, PFDReader: pfdReader, CompositeDeliverableTableReader: compositeDeliverableTableReader}, nil

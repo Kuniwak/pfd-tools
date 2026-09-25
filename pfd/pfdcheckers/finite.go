@@ -11,7 +11,7 @@ var Finite = checkers.AtomicChecker[pfdcommon.Target]{
 		return true
 	},
 	CheckFunc: func(t pfdcommon.Target, ch chan<- checkers.Problem) error {
-		// NOTE: Infinite graphs cannot be expanded in memory, so there's no need to consider them.
+
 		return nil
 	},
 }

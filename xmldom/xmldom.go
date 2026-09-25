@@ -1,10 +1,13 @@
 package xmldom
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 )
 
 type NodeKind int
@@ -24,6 +27,19 @@ type Node struct {
 	Children []*Node
 	Data     []byte
 	PI       *xml.ProcInst
+}
+
+func NewElement(local string) *Node {
+	name := xml.Name{Local: local}
+	return &Node{
+		Kind:  ElementNode,
+		Start: xml.StartElement{Name: name},
+		End:   xml.EndElement{Name: name},
+	}
+}
+
+func NewText(data string) *Node {
+	return &Node{Kind: TextNode, Data: []byte(data)}
 }
 
 func ParseXML(r io.Reader) ([]*Node, error) {
@@ -80,6 +96,16 @@ func ParseXML(r io.Reader) ([]*Node, error) {
 	return root.Children, nil
 }
 
+func Marshal(nodes []*Node) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	for _, n := range nodes {
+		if err := n.Write(buf); err != nil {
+			return nil, fmt.Errorf("xmldom.Marshal: %w", err)
+		}
+	}
+	return buf.Bytes(), nil
+}
+
 func (n *Node) Write(w io.Writer) error {
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "")
@@ -126,6 +152,62 @@ func (n *Node) GetAttr(local string, space string) (string, bool) {
 	return "", false
 }
 
+func (n *Node) SetAttr(local string, value string) {
+	for i := range n.Start.Attr {
+		if n.Start.Attr[i].Name.Local == local && n.Start.Attr[i].Name.Space == "" {
+			n.Start.Attr[i].Value = value
+			return
+		}
+	}
+	n.Start.Attr = append(n.Start.Attr, xml.Attr{Name: xml.Name{Local: local}, Value: value})
+}
+
+func (n *Node) FloatAttr(local string) (float64, bool) {
+	s, ok := n.GetAttr(local, "")
+	if !ok {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
+func (n *Node) FirstChildElement(local string) *Node {
+	for _, ch := range n.Children {
+		if ch.Kind == ElementNode && ch.Start.Name.Local == local {
+			return ch
+		}
+	}
+	return nil
+}
+
+func (n *Node) HasChildElements() bool {
+	for _, ch := range n.Children {
+		if ch.Kind == ElementNode {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *Node) IsBlankText() bool {
+	return n.Kind == TextNode && strings.TrimSpace(string(n.Data)) == ""
+}
+
+func (n *Node) ChildElementIndent() string {
+	for _, ch := range n.Children {
+		if ch.Kind == ElementNode {
+			break
+		}
+		if ch.IsBlankText() {
+			return string(ch.Data)
+		}
+	}
+	return "\n"
+}
+
 func (n *Node) Traverse(onEnter func(n *Node), onLeave func(n *Node)) {
 	if onEnter != nil {
 		onEnter(n)
@@ -146,10 +228,51 @@ func (n *Node) Clone() *Node {
 		Children: make([]*Node, len(n.Children)),
 		Data:     n.Data,
 	}
+
+	if n.Start.Attr != nil {
+		cloned.Start.Attr = make([]xml.Attr, len(n.Start.Attr))
+		copy(cloned.Start.Attr, n.Start.Attr)
+	}
 	for i, ch := range n.Children {
 		cloned.Children[i] = ch.Clone()
 	}
 	return cloned
+}
+
+func (n *Node) AppendChildIndented(indent string, child *Node) {
+	ind := NewText(indent)
+	count := len(n.Children)
+	if count > 0 && n.Children[count-1].IsBlankText() {
+		tail := n.Children[count-1]
+		newChildren := make([]*Node, 0, count+2)
+		newChildren = append(newChildren, n.Children[:count-1]...)
+		newChildren = append(newChildren, ind, child, tail)
+		n.Children = newChildren
+		return
+	}
+	n.Children = append(n.Children, ind, child)
+}
+
+func (n *Node) RemoveChildElements(pred func(*Node) bool) {
+	var filtered []*Node
+	blankOnly := true
+	for _, ch := range n.Children {
+		if ch.Kind == ElementNode && pred(ch) {
+			if len(filtered) > 0 && filtered[len(filtered)-1].IsBlankText() {
+				filtered = filtered[:len(filtered)-1]
+			}
+			continue
+		}
+		if !ch.IsBlankText() {
+			blankOnly = false
+		}
+		filtered = append(filtered, ch)
+	}
+
+	n.Children = filtered
+	if blankOnly {
+		n.Children = nil
+	}
 }
 
 func (n *Node) RewriteAttr(f func(node *Node, attr xml.Attr) xml.Attr) {

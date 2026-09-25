@@ -12,6 +12,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "PFD を構文解析します。（デバッグ用）"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
 	if err != nil {
@@ -32,6 +34,11 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 		return nil
 	}
 
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
+		return nil
+	}
+
 	if opts.CommonOptions.Version {
 		fmt.Fprintln(inout.Stdout, version.Version)
 		return nil
@@ -39,7 +46,7 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 
 	logger := slog.New(slograw.NewHandler(inout.Stderr, opts.CommonOptions.LogLevel))
 
-	compositeDeliverableTable, err := pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader)
+	compositeDeliverableTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader)
 	if err != nil {
 		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}

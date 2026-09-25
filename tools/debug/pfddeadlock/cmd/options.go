@@ -20,9 +20,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfddeadlock", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfddeadlock [options] -p <pfd> [-a <atomic-process-table>] [-d <deliverable-table>] [-r <resource-table>]")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfddeadlock [options] -p <pfd> [-ap <atomic-process-table>] [-ad <atomic-deliverable-table>] [-r <resource-table>]", ShortHelp)
 	}
 
 	var commonRawOptions tools.CommonRawOptions
@@ -32,9 +30,8 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	var configShortPath, configLongPath string
 	tools.DeclareFSMOptions(flags, &fsmRawOptions, &configShortPath, &configLongPath)
 
-	var outDirShort, outDirLong string
-	flags.StringVar(&outDirShort, "o", "", "output directory")
-	flags.StringVar(&outDirLong, "out", "", "output directory")
+	var outDir string
+	flags.StringVar(&outDir, tools.OutDirFlag, "", "output directory")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -48,6 +45,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -67,15 +67,8 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
-	var outDir string
-	if outDirShort != "" {
-		outDir = outDirShort
-	} else {
-		outDir = outDirLong
-	}
-
 	if outDir == "" {
-		return nil, fmt.Errorf("cmd.ParseOptions: -o or -out is required")
+		return nil, fmt.Errorf("cmd.ParseOptions: -%s is required", tools.OutDirFlag)
 	}
 
 	s, err := os.Stat(outDir)

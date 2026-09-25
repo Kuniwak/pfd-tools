@@ -21,9 +21,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("parse", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfdparse [options] -p <pfd> -cd <composite-deliverable-table>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfdparse [options] -p <pfd> -cd <composite-deliverable-table>", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
   $ pfdparse path/to/example.drawio
@@ -74,6 +72,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -87,9 +88,12 @@ Example
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
-	compositeDeliverableTableReader, _, err := tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag, &compositeDeliverableTablePathLongFlag, cwd)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	var compositeDeliverableTableReader io.Reader
+	if compositeDeliverableTablePathShortFlag != "" || compositeDeliverableTablePathLongFlag != "" {
+		compositeDeliverableTableReader, _, err = tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag, &compositeDeliverableTablePathLongFlag, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
 	}
 
 	return &Options{CommonOptions: commonOptions, PFDReader: pfdReader, CompositeDeliverableTableReader: compositeDeliverableTableReader}, nil

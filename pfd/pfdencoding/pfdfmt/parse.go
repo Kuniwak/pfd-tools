@@ -12,6 +12,12 @@ import (
 
 type ParseOptions struct {
 	CompositeDeliverableTable *pfd.CompositeDeliverableTable
+
+	AllowDetachedDetailPage bool
+}
+
+func (o ParseOptions) NormalizeOptions() pfddrawio.NormalizeOptions {
+	return pfddrawio.NormalizeOptions{AllowDetachedDetailPage: o.AllowDetachedDetailPage}
 }
 
 func Parse(title string, r io.Reader, opts *ParseOptions, logger *slog.Logger) (*pfd.PFD, error) {
@@ -27,7 +33,7 @@ func Parse(title string, r io.Reader, opts *ParseOptions, logger *slog.Logger) (
 			return nil, fmt.Errorf("pfdfmt.Parse: missing composite deliverable table")
 		}
 
-		p, _, err := pfddrawio.Parse(title, r2, opts.CompositeDeliverableTable, logger)
+		p, _, err := pfddrawio.ParseWithOptions(title, r2, opts.CompositeDeliverableTable, opts.NormalizeOptions(), logger)
 		if err != nil {
 			return nil, fmt.Errorf("pfdfmt.Parse: %w", err)
 		}
@@ -41,7 +47,7 @@ func Parse(title string, r io.Reader, opts *ParseOptions, logger *slog.Logger) (
 		if opts == nil || opts.CompositeDeliverableTable == nil {
 			return nil, fmt.Errorf("pfdfmt.Parse: missing composite deliverable table")
 		}
-		p, _, err := pfddrawio.Parse(title, xmlReader, opts.CompositeDeliverableTable, logger)
+		p, _, err := pfddrawio.ParseWithOptions(title, xmlReader, opts.CompositeDeliverableTable, opts.NormalizeOptions(), logger)
 		if err != nil {
 			return nil, fmt.Errorf("pfdfmt.Parse: %w", err)
 		}

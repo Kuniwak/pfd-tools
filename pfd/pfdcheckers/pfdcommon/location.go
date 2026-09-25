@@ -21,10 +21,11 @@ func NewLocations(ls ...Location) []checkers.Location {
 type LocationType string
 
 const (
-	LocationTypePFD                   LocationType = "PFD"
-	LocationTypeAtomicProcessTable    LocationType = "ATOMIC_PROCESS_TABLE"
-	LocationTypeDeliverableTable      LocationType = "DELIVERABLE_TABLE"
-	LocationTypeCompositeProcessTable LocationType = "COMPOSITE_PROCESS_TABLE"
+	LocationTypePFD                       LocationType = "PFD"
+	LocationTypeAtomicProcessTable        LocationType = "ATOMIC_PROCESS_TABLE"
+	LocationTypeDeliverableTable          LocationType = "DELIVERABLE_TABLE"
+	LocationTypeCompositeProcessTable     LocationType = "COMPOSITE_PROCESS_TABLE"
+	LocationTypeCompositeDeliverableTable LocationType = "COMPOSITE_DELIVERABLE_TABLE"
 )
 
 type Location struct {

@@ -14,6 +14,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "2 つの PFD を比較します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
 	if err != nil {
@@ -34,6 +36,11 @@ var ErrHasDiff = errors.New("cmd.MainCommandByOptions: diff is not empty")
 
 func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 	if opts.CommonOptions.Help {
+		return nil
+	}
+
+	if opts.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 
@@ -97,28 +104,30 @@ func MainCommandByOptions(opts *Options, inout *cli.ProcInout) error {
 }
 
 func buildDiff(opts *Options) (*pfd.DiffResult, error) {
-	compDelivTable1, err := pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader1)
+	compDelivTable1, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader1)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		return nil, fmt.Errorf("cmd.buildDiff: %w", err)
 	}
 
 	pA, err := pfdfmt.Parse("1", opts.PFDReader1, &pfdfmt.ParseOptions{
 		CompositeDeliverableTable: compDelivTable1,
+		AllowDetachedDetailPage:   opts.Fragment,
 	}, opts.CommonOptions.Logger)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		return nil, fmt.Errorf("cmd.buildDiff: %w", err)
 	}
 
-	compDelivTable2, err := pfdtsv.ParseCompositeDeliverableTable(opts.CompositeDeliverableTableReader2)
+	compDelivTable2, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(opts.CompositeDeliverableTableReader2)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		return nil, fmt.Errorf("cmd.buildDiff: %w", err)
 	}
 
 	pB, err := pfdfmt.Parse("2", opts.PFDReader2, &pfdfmt.ParseOptions{
 		CompositeDeliverableTable: compDelivTable2,
+		AllowDetachedDetailPage:   opts.Fragment,
 	}, opts.CommonOptions.Logger)
 	if err != nil {
-		return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
+		return nil, fmt.Errorf("cmd.buildDiff: %w", err)
 	}
 
 	return pfd.Diff(pA, pB), nil

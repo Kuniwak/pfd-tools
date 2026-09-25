@@ -9,17 +9,13 @@ type Error struct {
 	Wrapped   error
 }
 
-// Location represents the location where an error occurred.
 type Location struct {
-	// IsNode is true if the error is related to a node element. false otherwise.
 	IsNode bool
-	// If IsNode is true, this is the ID of the node element, otherwise undefined.
+
 	NodeID NodeID
 
-	// If IsNode is false, the error is related to an edge. true otherwise.
-	// If IsNode is false, this is the ID of the source node of the edge (including feedback edges), otherwise undefined.
 	EdgeSourceID NodeID
-	// If IsNode is false, this is the ID of the target node of the edge (including feedback edges), otherwise undefined.
+
 	EdgeTargetID NodeID
 }
 
@@ -31,11 +27,6 @@ func NewEdgeLocation(edgeSourceID, edgeTargetID NodeID) Location {
 	return Location{EdgeSourceID: edgeSourceID, EdgeTargetID: edgeTargetID, IsNode: false}
 }
 
-// CompareLocation compares Locations. The ordering satisfies the following conditions:
-// 1. Node-related errors are smaller than edge-related errors
-// 2. If both are node-related errors, the error with the smaller node ID is smaller
-// 3. If both are edge-related errors and the edge sources are different, the error with the smaller source ID is smaller
-// 4. If both are edge-related errors and the edge sources are the same, the error with the smaller target ID is smaller
 func CompareLocation(a, b Location) int {
 	if a.IsNode {
 		if !b.IsNode {

@@ -8,6 +8,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/sets"
@@ -65,7 +66,7 @@ func TestValidInitVolume(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(p, tc.AtomicProcessTable, nil, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
+				tgt := &fsmcommon.Target{PFD: p, AtomicProcessTable: tc.AtomicProcessTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: slog.New(slogtest.NewTestHandler(t))}
 				if err := ValidInitVolume.Check(tgt, ch); err != nil {
 					t.Errorf("ValidInitVolume.Check: %v", err)
 				}

@@ -27,27 +27,30 @@ type Options struct {
 	CompositeDeliverableTableReader2 io.Reader
 	OutputFormat                     OutputFormat
 	Prompt                           bool
+	Fragment                         bool
 }
 
 func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfddiff", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfddiff [options] -p1 <pfd-a> -cd1 <composite-deliverable-table-a> -p2 <pfd-b> -cd2 <composite-deliverable-table-b>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfddiff [options] -p1 <pfd-a> -cd1 <composite-deliverable-table-a> -p2 <pfd-b> -cd2 <composite-deliverable-table-b>", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
   $ pfddiff -p1 path/to/a.drawio -cd1 path/to/composite-deliverable-table-a.tsv -p2 path/to/b.drawio -cd2 path/to/composite-deliverable-table-b.tsv
   + P1 ----> D1
   - P2 ----> D2
+
+  オーバーレイ用の断片（複合プロセスの本体を別ファイルに持つ詳細ページだけのファイル）同士を
+  比較するときは -fragment を付けます。
+  $ pfddiff -fragment -p1 path/to/overlay-a.drawio.png -p2 path/to/overlay-b.drawio.png
 `)
 	}
 
 	var commonRawOptions tools.CommonRawOptions
 	tools.DeclareCommonOptions(flags, &commonRawOptions)
 
-	outputFormatString := flags.String("format", "diff", "format of the output")
+	outputFormatString := flags.String(tools.OutFormatFlag, "diff", "format of the output")
 	showSameFlag := flags.Bool("show-same", false, "show same nodes and edges")
 
 	var pfdPathShortFlag1, pfdPathLongFlag1 string
@@ -63,6 +66,9 @@ Example
 	var promptFlag bool
 	flags.BoolVar(&promptFlag, "prompt", false, "output diff as a prompt for Agentic AIs")
 
+	var fragmentFlag bool
+	flags.BoolVar(&fragmentFlag, "fragment", false, "compare overlay fragments (detail pages whose composite process is drawn in another file)")
+
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return &Options{CommonOptions: &tools.CommonOptions{Help: true}}, nil
@@ -75,6 +81,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -88,18 +97,24 @@ Example
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
-	compositeDeliverableTableReader1, _, err := tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag1, &compositeDeliverableTablePathLongFlag1, cwd)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	var compositeDeliverableTableReader1 io.Reader
+	if compositeDeliverableTablePathShortFlag1 != "" || compositeDeliverableTablePathLongFlag1 != "" {
+		compositeDeliverableTableReader1, _, err = tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag1, &compositeDeliverableTablePathLongFlag1, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
 	}
 
 	pfdReader2, _, err := tools.ValidatePFDOptions(&pfdPathShortFlag2, &pfdPathLongFlag2, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
-	compositeDeliverableTableReader2, _, err := tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag2, &compositeDeliverableTablePathLongFlag2, cwd)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	var compositeDeliverableTableReader2 io.Reader
+	if compositeDeliverableTablePathShortFlag2 != "" || compositeDeliverableTablePathLongFlag2 != "" {
+		compositeDeliverableTableReader2, _, err = tools.ValidateCompositeDeliverableTableOptions(&compositeDeliverableTablePathShortFlag2, &compositeDeliverableTablePathLongFlag2, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+		}
 	}
 
 	var outputFormat OutputFormat
@@ -119,5 +134,6 @@ Example
 		OutputFormat:                     outputFormat,
 		ShowSame:                         *showSameFlag,
 		Prompt:                           promptFlag,
+		Fragment:                         fragmentFlag,
 	}, nil
 }

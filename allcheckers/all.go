@@ -21,10 +21,13 @@ var PFDCheckers = checkers.NewParallelChecker(
 	pfdcheckers.DisjOrProperSubsetComp,
 	pfdcheckers.ConsistentInputComp,
 	pfdcheckers.ConsistentOutputComp,
+	pfdcheckers.ImplicitAtomicComposite,
 	pfdcheckers.NoDesc,
+	pfdcheckers.MalformedID,
 	pfdcheckers.ConsistentAPTable,
 	pfdcheckers.ConsistentCPTable,
 	pfdcheckers.ConsistentDTable,
+	pfdcheckers.ConsistentCDTable,
 )
 
 var FSMCheckers = checkers.NewParallelChecker(
@@ -36,4 +39,5 @@ var FSMCheckers = checkers.NewParallelChecker(
 	fsmchecker.ValidMaxRevision,
 	fsmchecker.ValidResourcesSet,
 	fsmchecker.ValidPrecondition,
+	fsmchecker.NoFeedbackEdges,
 )

@@ -8,6 +8,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/sets"
@@ -25,7 +26,7 @@ func TestValidAvailableTime(t *testing.T) {
 				ExtraHeaders: []string{fsmtable.AvailableTimeHeaderEn},
 				Rows: []*pfd.AtomicDeliverableRow{
 					{ID: "D1", Description: "Deliverable 1", ExtraCells: []string{"-1"}},
-					{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{"-1"}}, // not get reported because it is not initial deliverable
+					{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{"-1"}},
 				},
 			},
 			Expected: []checkers.Problem{
@@ -37,7 +38,7 @@ func TestValidAvailableTime(t *testing.T) {
 				ExtraHeaders: []string{fsmtable.AvailableTimeHeaderEn},
 				Rows: []*pfd.AtomicDeliverableRow{
 					{ID: "D1", Description: "Deliverable 1", ExtraCells: []string{"0"}},
-					{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{"-1"}}, // not get reported because it is not initial deliverable
+					{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{"-1"}},
 				},
 			},
 			Expected: []checkers.Problem{},
@@ -68,7 +69,7 @@ func TestValidAvailableTime(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(p, nil, tc.AtomicDeliverableTable, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
+				tgt := &fsmcommon.Target{PFD: p, AtomicDeliverableTable: tc.AtomicDeliverableTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: slog.New(slogtest.NewTestHandler(t))}
 				if err := ValidAvailableTime.Check(tgt, ch); err != nil {
 					t.Errorf("ValidAvailableTime.Check: %v", err)
 				}

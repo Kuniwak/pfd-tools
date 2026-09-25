@@ -8,7 +8,9 @@ import (
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/pfdencoding/pfddot"
+	"github.com/Kuniwak/pfd-tools/pfd/pfdfuzz"
 	"github.com/Kuniwak/pfd-tools/slogtest"
 	"pgregory.net/rapid"
 )
@@ -18,8 +20,11 @@ func TestAll(t *testing.T) {
 		t.Run(p.Title, func(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
-				lint := NewLintFunc(slog.New(slogtest.NewTestHandler(t)))
-				if err := lint(p, nil, nil, nil, nil, nil, nil, nil, ch); err != nil {
+				logger := slog.New(slogtest.NewTestHandler(t))
+				lint := NewLintFunc(logger)
+
+				cdt := pfd.NewCompositeDeliverableTable(p, pfd.NewNodeMap(p.Nodes, logger))
+				if err := lint(Target{PFD: p, CompositeDeliverableTable: cdt, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}}, ch); err != nil {
 					t.Errorf("NewLintFunc: %v", err)
 				}
 			}()
@@ -34,11 +39,11 @@ func TestAll(t *testing.T) {
 func FuzzLint(t *testing.F) {
 	sb := &strings.Builder{}
 	t.Fuzz(rapid.MakeFuzz(func(t *rapid.T) {
-		p := pfd.AnyValidPFD(t, 100)
+		p := pfdfuzz.AnyValidPFD(t, 100)
 		ch := make(chan checkers.Problem)
 		go func() {
 			lint := NewLintFunc(slog.New(slogtest.NewRapidHandler(t)))
-			if err := lint(p, nil, nil, nil, nil, nil, nil, nil, ch); err != nil {
+			if err := lint(Target{PFD: p, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}}, ch); err != nil {
 				t.Errorf("NewLintFunc: %v", err)
 			}
 		}()
@@ -50,4 +55,19 @@ func FuzzLint(t *testing.F) {
 			t.Errorf("got %v, expected nil", got)
 		}
 	}))
+}
+
+func TestLintRejectsUnknownExecModel(t *testing.T) {
+	testCases := map[string]execmodel.Model{
+		"zero value":            {},
+		"unknown resource mode": {Resource: execmodel.ResourceMode("none"), Feedback: execmodel.FeedbackModeDisabled},
+		"unknown feedback mode": {Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackMode("on")},
+	}
+	for name, model := range testCases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Lint(Target{PFD: pfd.PresetSmallest, Model: model}, slog.New(slogtest.NewTestHandler(t))); err == nil {
+				t.Errorf("Lint should fail for %+v, but did not", model)
+			}
+		})
+	}
 }

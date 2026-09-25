@@ -18,9 +18,7 @@ func TestInitialState(t *testing.T) {
 	maxLoopCount := 3
 	initVolume := Volume(2)
 	logger := slog.New(slogtest.NewTestHandler(t))
-	// [D1] -> (P1) -> [D2] -> (P3) -> [D4]
-	//    \
-	//     +-> (P2) -> [D3]
+
 	p := newSafePFDByUnsafePFD(&pfd.PFD{
 		Nodes: sets.New(
 			(*pfd.Node).Compare,
@@ -106,13 +104,11 @@ func TestInitialState(t *testing.T) {
 
 func TestAllocatability(t *testing.T) {
 	t.Run("first work", func(t *testing.T) {
-		maxLoopCount := /* any */ 3
+		maxLoopCount := 3
 		initVolume := Volume(2)
 		logger := slog.New(slogtest.NewTestHandler(t))
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
-			//            - - -
-			//           V     \
-			// [D1] -> (P1) -> [D2]
+
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
 				&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
@@ -142,16 +138,16 @@ func TestAllocatability(t *testing.T) {
 		)
 
 		state := State{
-			Time:/* any */ 123,
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
 				"P1": initVolume,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 0, // Not created yet
+				"D1": 1,
+				"D2": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": /* any */ 0,
+				"P1": 0,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -170,13 +166,12 @@ func TestAllocatability(t *testing.T) {
 	})
 
 	t.Run("continue", func(t *testing.T) {
-		// Prohibit reworks
+
 		maxLoopCount := 0
 		initVolume := Volume(2)
 		logger := slog.New(slogtest.NewTestHandler(t))
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
-			// [D1] -> (P1) -> [D2]
-			// P1: Executable (continuing execution)
+
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
 				&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
@@ -205,16 +200,16 @@ func TestAllocatability(t *testing.T) {
 			logger,
 		)
 		state := State{
-			Time:/* any */ 123,
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
 				"P1": initVolume - p1Consumed,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 0, // Not created yet
+				"D1": 1,
+				"D2": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 0, // Reworks prohibited
+				"P1": 0,
 			},
 			AllocationShouldContinue: Allocation{
 				"P1": {
@@ -241,9 +236,7 @@ func TestAllocatability(t *testing.T) {
 		maxLoopCount := 3
 		initVolume := Volume(2)
 		logger := slog.New(slogtest.NewTestHandler(t))
-		//            - - -
-		//           V     \
-		// [D1] -> (P1) -> [D2]
+
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
@@ -274,16 +267,16 @@ func TestAllocatability(t *testing.T) {
 		)
 
 		state := State{
-			Time:/* any */ 123,
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
-				"P1": 1, // Able to rework
+				"P1": 1,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 1, // Created
+				"D1": 1,
+				"D2": 1,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 1, // Any less than maxLoopCount, but not zero
+				"P1": 1,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -305,7 +298,7 @@ func TestAllocatability(t *testing.T) {
 		maxLoopCount := 3
 		initVolume := Volume(2)
 		logger := slog.New(slogtest.NewTestHandler(t))
-		// [D1] -> (P1) -> [D2]
+
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
@@ -336,16 +329,16 @@ func TestAllocatability(t *testing.T) {
 		)
 
 		state := State{
-			Time: availableTime - 1, // Any less than available time
+			Time: availableTime - 1,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
-				"P1": 1, // Able to rework
+				"P1": 1,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 0, // Initial deliverable but not be available yet
-				"D2": 0, // Any
+				"D1": 0,
+				"D2": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": maxLoopCount - 1, // Any less than maxLoopCount
+				"P1": maxLoopCount - 1,
 			},
 			AllocationShouldContinue:      Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{},
@@ -365,7 +358,7 @@ func TestAllocatability(t *testing.T) {
 		maxLoopCount := 3
 		logger := slog.New(slogtest.NewTestHandler(t))
 		initVolume := Volume(2)
-		// [D1] -> (P1) -> [D2] -> (P2) -> [D3]
+
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
@@ -399,19 +392,19 @@ func TestAllocatability(t *testing.T) {
 		)
 
 		state := State{
-			Time: 123, // Any
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
 				"P1": initVolume,
 				"P2": initVolume,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 0, // Not created yet
-				"D3": 0, // Not created yet
+				"D1": 1,
+				"D2": 0,
+				"D3": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 0, // Any less than maxLoopCount
-				"P2": 0, // Any less than maxLoopCount
+				"P1": 0,
+				"P2": 0,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -435,15 +428,7 @@ func TestAllocatability(t *testing.T) {
 		initVolume := Volume(2)
 		maxLoopCount := 3
 		logger := slog.New(slogtest.NewTestHandler(t))
-		//	.             - - - - - - - - - - - - -
-		//		         /                          \
-		//		        /    +--> [D2] -> (P2) -> [D4]
-		//	           V    /
-		//		[D1] -> (P1)
-		//	           ^    \
-		//	            \    +--> [D3] -> (P3) -> [D5]
-		//	             \                          /
-		//	              - - - - - - - - - - - - -
+
 		p := newSafePFDByUnsafePFD(pfd.PresetButterflyLoop)
 		availableTimeFunc := AlwaysAvailableTimeFunc()
 		reworkVolumeFunc := ExponentialReworkVolumeFunc(0.5, ConstInitialVolumeFunc(initVolume))
@@ -463,23 +448,23 @@ func TestAllocatability(t *testing.T) {
 			logger,
 		)
 		state := State{
-			Time:/* any */ 123,
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
 				"P1": reworkVolumeFunc("P1", 1),
-				"P2": 0,          // Any
-				"P3": initVolume, // Any
+				"P2": 0,
+				"P3": initVolume,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 1, // Created
-				"D3": 1, // Created
-				"D4": 1, // Created
-				"D5": 0, // Not created yet
+				"D1": 1,
+				"D2": 1,
+				"D3": 1,
+				"D4": 1,
+				"D5": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 1, // Any
-				"P2": 1, // Any
-				"P3": 0, // Any
+				"P1": 1,
+				"P2": 1,
+				"P3": 0,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -536,22 +521,22 @@ func TestAllocatability(t *testing.T) {
 			logger,
 		)
 		state := State{
-			Time:/* any */ 123,
+			Time: 123,
 			RemainedVolumeMap: map[pfd.AtomicProcessID]Volume{
 				"P1": reworkVolumeFunc("P1", 1),
 				"P2": reworkVolumeFunc("P2", 1),
 				"P3": reworkVolumeFunc("P3", 1),
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 1, // Created
-				"D3": 1, // Created
-				"D4": 1, // Created
+				"D1": 1,
+				"D2": 1,
+				"D3": 1,
+				"D4": 1,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 1, // Must be 1
-				"P2": 1, // Must be 1
-				"P3": 1, // Must be 1
+				"P1": 1,
+				"P2": 1,
+				"P3": 1,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -574,14 +559,10 @@ func TestAllocatability(t *testing.T) {
 
 func TestNextState(t *testing.T) {
 	t.Run("triple branch", func(t *testing.T) {
-		initVolume := /* any */ Volume(2)
-		maxLoopCount := /* any */ 3
+		initVolume := Volume(2)
+		maxLoopCount := 3
 		logger := slog.New(slogtest.NewTestHandler(t))
-		// [D1]----> (P1) -> [D2]
-		//    \
-		//     +---> (P2) -> [D3]
-		//      \
-		//       +-> (P3) -> [D4]
+
 		p := newSafePFDByUnsafePFD(&pfd.PFD{
 			Nodes: sets.New(
 				(*pfd.Node).Compare,
@@ -644,10 +625,10 @@ func TestNextState(t *testing.T) {
 				"P3": initVolume,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 0, // Not created yet
-				"D3": 0, // Not created yet
-				"D4": 0, // Not created yet
+				"D1": 1,
+				"D2": 0,
+				"D3": 0,
+				"D4": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
 				"P1": 0,
@@ -678,15 +659,15 @@ func TestNextState(t *testing.T) {
 				"P3": initVolume,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Initial deliverable
-				"D2": 1, // Created
-				"D3": 0, // Not created yet
-				"D4": 0, // Not created yet
+				"D1": 1,
+				"D2": 1,
+				"D3": 0,
+				"D4": 0,
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 1, // Completed
-				"P2": 0, // Not completed yet
-				"P3": 0, // Not executed
+				"P1": 1,
+				"P2": 0,
+				"P3": 0,
 			},
 			AllocationShouldContinue: Allocation{
 				"P2": {Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: initVolume - remainedVolumeP2},
@@ -709,9 +690,7 @@ func TestNextState(t *testing.T) {
 		initVolume := Volume(2)
 		initVolumeFunc := ConstInitialVolumeFunc(initVolume)
 		logger := slog.New(slogtest.NewTestHandler(t))
-		//	.           - - -
-		//	           V     \
-		//	[D1] -> (P1) -> [D2]
+
 		p := newSafePFDByUnsafePFD(pfd.PresetSmallestLoop)
 		availableTimeFunc := AlwaysAvailableTimeFunc()
 		reworkVolumeFunc := ExponentialReworkVolumeFunc(reworkVolumeRatio, initVolumeFunc)
@@ -744,15 +723,15 @@ func TestNextState(t *testing.T) {
 				"P1": reworkVolumeFunc("P1", 1),
 			},
 			NumOfCompleteMap: map[pfd.AtomicProcessID]int{
-				"P1": 1, // 0 → 1
+				"P1": 1,
 			},
 			RevisionMap: map[pfd.AtomicDeliverableID]int{
-				"D1": 1, // Not changed
-				"D2": 1, // 0 → 1
+				"D1": 1,
+				"D2": 1,
 			},
 			AllocationShouldContinue: Allocation{},
 			UpdatedDeliverablesNotHandled: map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
-				"P1": sets.New(pfd.AtomicDeliverableID.Compare, "D2"), // -D1 +D2
+				"P1": sets.New(pfd.AtomicDeliverableID.Compare, "D2"),
 			},
 		}
 		if !reflect.DeepEqual(got, expected) {
@@ -772,9 +751,5 @@ func AllocationSetString(a *sets.Set[Allocation]) string {
 }
 
 func newSafePFDByUnsafePFD(p *pfd.PFD) *pfd.ValidPFD {
-	actual, err := pfd.NewSafePFDByUnsafePFD(p)
-	if err != nil {
-		panic(err)
-	}
-	return actual
+	return pfd.MustNewSafePFDByUnsafePFD(p)
 }

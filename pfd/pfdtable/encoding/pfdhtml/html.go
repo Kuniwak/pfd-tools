@@ -81,7 +81,8 @@ func WriteCompositeDeliverableTable(w io.Writer, table *pfd.CompositeDeliverable
 func CompositeDeliverableTable(table *pfd.CompositeDeliverableTable) (*tablehtml.Table, error) {
 	rows := make([][]string, 0, len(table.Rows))
 	for _, row := range table.Rows {
-		rows = append(rows, append([]string{string(row.ID), row.Description}, row.ExtraCells...))
+
+		rows = append(rows, append([]string{string(row.ID), row.Description, row.DeliverablesCell()}, row.ExtraCells...))
 	}
 	tbl, err := tablehtml.NewTable(table.Header(), rows)
 	if err != nil {

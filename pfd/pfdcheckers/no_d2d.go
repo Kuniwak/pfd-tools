@@ -15,12 +15,12 @@ var NoD2D = checkers.AtomicChecker[pfdcommon.Target]{
 		for _, edge := range t.PFD.Edges.Iter() {
 			src, srcOk := t.Memoized.NodeMap[edge.Source]
 			if !srcOk {
-				// NOTE: Skip as it will be caught by in-field.
+
 				continue
 			}
 			target, targetOk := t.Memoized.NodeMap[edge.Target]
 			if !targetOk {
-				// NOTE: Skip as it will be caught by in-field.
+
 				continue
 			}
 			if src.Type.IsDeliverable() && target.Type.IsDeliverable() {

@@ -94,16 +94,16 @@ func NewMemoized(
 			hasPreconditionMap = true
 		}
 
-		if fsmtable.DefaultGroupColumnMatchFunc(apTable.ExtraHeaders) >= 0 {
-			groupMap, err = fsmtable.RawGroupsMap(apTable, fsmtable.DefaultGroupColumnMatchFunc)
+		if fsmtable.DefaultRowColumnMatchFunc(apTable.ExtraHeaders) >= 0 {
+			groupMap, err = fsmtable.RawGroupsMap(apTable, fsmtable.DefaultRowColumnMatchFunc)
 			if err != nil {
 				return nil, fmt.Errorf("fsmcommon.NewMemoized: %w", err)
 			}
 			hasGroupMap = true
 		}
 
-		if fsmtable.DefaultMilestoneColumnMatchFunc(apTable.ExtraHeaders) >= 0 {
-			milestoneMap, err = fsmtable.RawMilestoneMap(apTable, fsmtable.DefaultMilestoneColumnMatchFunc)
+		if fsmtable.DefaultBarColumnMatchFunc(apTable.ExtraHeaders) >= 0 {
+			milestoneMap, err = fsmtable.RawMilestoneMap(apTable, fsmtable.DefaultBarColumnMatchFunc)
 			if err != nil {
 				return nil, fmt.Errorf("fsmcommon.NewMemoized: %w", err)
 			}

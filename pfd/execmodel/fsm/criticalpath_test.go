@@ -27,13 +27,11 @@ func TestPrefixUntilProcessStart(t *testing.T) {
 		{
 			name:     "process not in plan",
 			ap:       "P_unknown",
-			wantLen:  -1, // special: same as full plan
+			wantLen:  -1,
 			wantDesc: "prefix should be full plan when target is not found",
 		},
 	}
 
-	// Build a simple plan with known transitions for testing
-	// [D1] -> (P1) -> [D2] -> (P2) -> [D3]
 	p := newSafePFDByUnsafePFD(&pfd.PFD{
 		Nodes: sets.New(
 			(*pfd.Node).Compare,
@@ -80,7 +78,6 @@ func TestPrefixUntilProcessStart(t *testing.T) {
 		t.Fatal("no plan found")
 	}
 
-	// P2 depends on P1, so P2 should appear after P1 in the plan
 	testCases = append(testCases, testCase{
 		name:     "process after first transition",
 		ap:       "P2",
@@ -102,36 +99,29 @@ func TestPrefixUntilProcessStart(t *testing.T) {
 	}
 }
 
-// TestMaximumElasticityWithResourceConflict tests that the iterative refinement
-// correctly computes total float (maximum elasticity) when resource conflicts exist.
-//
-// PFD structure:
-//
-//	[D1] → (Pa) → [D2] → (Pb) → [D3] → (Pc) → [D4]
-//	[D5] → (Pd) → [D6] → (Pe) → [D7]
-//
-// Pa: volume=5, resource=R2
-// Pb: volume=2, resource=R2
-// Pc: volume=3, resource=R1  (shared with Pe)
-// Pd: volume=1, resource=R3  (independent of Pa/Pb path)
-// Pe: volume=3, resource=R1  (shared with Pc)
-//
-// Baseline schedule (leadtime=10):
-//   t=0..5: Pa(R2) + Pd(R3) in parallel
-//   t=1: Pd done, Pe(R1) starts. t=1..4: Pe(R1)
-//   t=5..7: Pb(R2)
-//   t=7..10: Pc(R1) (R1 free since t=4)
-//
-// Pa→Pb→Pc is the critical path (5+2+3=10). Pd→Pe has slack (1+3=4, finishes at t=4).
-// Pc and Pe share R1, so Pd has total float = 3 (Pe finishes at t=4, Pc starts at t=7).
-//
-// With the OLD algorithm (extra=leadtime=10 for Pd):
-//   Pd volume becomes 11, Pd runs t=0..11, Pe delayed to t=11..14.
-//   Meanwhile Pc runs t=7..10 without R1 conflict (Pe hasn't started).
-//   Leadtime=14, extension=4, float=10-4=6 (WRONG, should be 3).
-//
-// With the NEW iterative algorithm, it converges to the correct float=3.
 func TestMaximumElasticityWithResourceConflict(t *testing.T) {
+
+	searchFuncs := map[string]SearchWithPrefixFunc{
+		"poorest": SearchPoorestWithPrefix(1),
+		"poor":    SearchFastestWithPrefix(1),
+		"best":    SearchBestPlansWithPrefix(),
+	}
+	rates := map[string]Volume{
+		"consumed volume 1": 1,
+		"consumed volume 2": 2,
+	}
+	for rateName, rate := range rates {
+		for searchName, searchFunc := range searchFuncs {
+			t.Run(rateName+"/"+searchName, func(t *testing.T) {
+				assertMaximumElasticityWithResourceConflict(t, newResourceConflictEnv(t, rate), searchFunc)
+			})
+		}
+	}
+}
+
+func newResourceConflictEnv(t *testing.T, rate Volume) *Env {
+	t.Helper()
+
 	p := newSafePFDByUnsafePFD(&pfd.PFD{
 		Nodes: sets.New(
 			(*pfd.Node).Compare,
@@ -166,15 +156,15 @@ func TestMaximumElasticityWithResourceConflict(t *testing.T) {
 	initVolumeFunc := func(ap pfd.AtomicProcessID) Volume {
 		switch ap {
 		case "Pa":
-			return 5
+			return 5 * rate
 		case "Pb":
-			return 2
+			return 2 * rate
 		case "Pc":
-			return 3
+			return 3 * rate
 		case "Pd":
-			return 1
+			return 1 * rate
 		case "Pe":
-			return 3
+			return 3 * rate
 		default:
 			panic("unknown process: " + string(ap))
 		}
@@ -183,14 +173,14 @@ func TestMaximumElasticityWithResourceConflict(t *testing.T) {
 	logger := slog.New(slogtest.NewTestHandler(t))
 
 	neededResourceSetsFunc := NeededResourceSetsFuncByMap(map[pfd.AtomicProcessID]*sets.Set[AllocationElement]{
-		"Pa": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: 1}),
-		"Pb": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: 1}),
-		"Pc": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1}),
-		"Pd": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R3"), ConsumedVolume: 1}),
-		"Pe": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: 1}),
+		"Pa": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: rate}),
+		"Pb": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R2"), ConsumedVolume: rate}),
+		"Pc": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: rate}),
+		"Pd": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R3"), ConsumedVolume: rate}),
+		"Pe": sets.New(AllocationElement.Compare, AllocationElement{Resources: sets.New(ResourceID.Compare, "R1"), ConsumedVolume: rate}),
 	})
 
-	env := NewEnv(
+	return NewEnv(
 		p,
 		sets.New(ResourceID.Compare, "R1", "R2", "R3"),
 		NewAvailableAllocationsFunc(neededResourceSetsFunc),
@@ -202,16 +192,17 @@ func TestMaximumElasticityWithResourceConflict(t *testing.T) {
 		AlwaysAvailableTimeFunc(),
 		logger,
 	)
+}
 
-	searchFunc := SearchBestPlansWithPrefix()
-	criticalPathInfoFunc := NewCriticalPathInfoFunc(searchFunc)
-	info, err := criticalPathInfoFunc(env)
+func assertMaximumElasticityWithResourceConflict(t *testing.T, env *Env, searchFunc SearchWithPrefixFunc) {
+	t.Helper()
+
+	info, err := NewCriticalPathInfoFunc(searchFunc)(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify baseline leadtime first
-	basePlans, err := searchBestPlans(env)
+	basePlans, err := searchFunc(env, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,79 +213,69 @@ func TestMaximumElasticityWithResourceConflict(t *testing.T) {
 		t.Logf("%s: max_elasticity=%v, min_elasticity=%v (has=%v)", ap, item.MaximumElasticity, item.MinimumElasticity, item.HasMinimumElasticity)
 	}
 
-	// Baseline: Pa(R2)+Pd(R3) in parallel from t=0.
-	// Pd done at t=1, Pe(R1) starts t=1..4. Pa done at t=5, Pb(R2) t=5..7.
-	// Pc(R1) starts at t=7 (R1 free since t=4). Leadtime = 10.
 	if baseLeadtime != 10 {
 		t.Fatalf("baseline leadtime: got %v, want 10", baseLeadtime)
 	}
 
-	// Pa is on the critical path: increasing Pa by any amount increases the leadtime.
-	if info["Pa"].MaximumElasticity != 0 {
+	if !info["Pa"].MaximumElasticity.ApproximateEqual(0) {
 		t.Errorf("Pa total float: got %v, want 0", info["Pa"].MaximumElasticity)
 	}
 
-	// Pd has total float = 3: Pe finishes at t=4, Pc starts at t=7, gap = 3.
-	if info["Pd"].MaximumElasticity != 3 {
+	if !info["Pd"].MaximumElasticity.ApproximateEqual(3) {
 		t.Errorf("Pd total float: got %v, want 3", info["Pd"].MaximumElasticity)
 	}
 
-	// Pe also has total float = 3 (same slack as Pd).
-	if info["Pe"].MaximumElasticity != 3 {
+	if !info["Pe"].MaximumElasticity.ApproximateEqual(3) {
 		t.Errorf("Pe total float: got %v, want 3", info["Pe"].MaximumElasticity)
 	}
 
-	// All total floats should be >= 0 (no negative values)
 	for ap, item := range info {
 		if item.MaximumElasticity < 0 {
 			t.Errorf("%s: total float is negative: %v", ap, item.MaximumElasticity)
 		}
 	}
 
-	// Verify total float correctness by actually extending each process and re-running
 	for ap, item := range info {
+		rate := MaxConsumedVolume(env.NeededResourceSetsFunc(ap))
 		totalFloat := item.MaximumElasticity
-		if totalFloat <= 0 {
+		if totalFloat <= 0 || totalFloat.ApproximateEqual(0) {
 			continue
 		}
 
-		// Extending by exactly totalFloat should NOT increase leadtime
-		envExtended := env.Clone()
-		capturedAP := ap
-		capturedFloat := totalFloat
-		envExtended.InitialVolumeFunc = func(ap2 pfd.AtomicProcessID) Volume {
-			if ap2 == capturedAP {
-				return initVolumeFunc(ap2) + Volume(capturedFloat)
-			}
-			return initVolumeFunc(ap2)
-		}
-		extPlans, err := searchBestPlans(envExtended)
-		if err != nil {
-			t.Fatalf("extending %s by %v: %v", ap, totalFloat, err)
-		}
-		extPlan, _ := extPlans.At(0)
-		if extPlan.Leadtime() > baseLeadtime {
+		leadtime := planWithExtraVolume(t, env, searchFunc, basePlan, ap, Volume(totalFloat)*rate).Leadtime()
+		if leadtime > baseLeadtime && !leadtime.ApproximateEqual(baseLeadtime) {
 			t.Errorf("%s: extending by totalFloat=%v increased leadtime from %v to %v",
-				ap, totalFloat, baseLeadtime, extPlan.Leadtime())
+				ap, totalFloat, baseLeadtime, leadtime)
 		}
 
-		// Extending by totalFloat + 1 SHOULD increase leadtime
-		envOverExtended := env.Clone()
-		capturedExtraFloat := totalFloat + execmodel.Time(1)
-		envOverExtended.InitialVolumeFunc = func(ap2 pfd.AtomicProcessID) Volume {
-			if ap2 == capturedAP {
-				return initVolumeFunc(ap2) + Volume(capturedExtraFloat)
-			}
-			return initVolumeFunc(ap2)
-		}
-		overExtPlans, err := searchBestPlans(envOverExtended)
-		if err != nil {
-			t.Fatalf("over-extending %s by %v: %v", ap, capturedExtraFloat, err)
-		}
-		overExtPlan, _ := overExtPlans.At(0)
-		if overExtPlan.Leadtime() <= baseLeadtime {
+		overFloat := totalFloat + execmodel.Time(1)
+		overLeadtime := planWithExtraVolume(t, env, searchFunc, basePlan, ap, Volume(overFloat)*rate).Leadtime()
+		if overLeadtime <= baseLeadtime || overLeadtime.ApproximateEqual(baseLeadtime) {
 			t.Errorf("%s: extending by totalFloat+1=%v did NOT increase leadtime (still %v)",
-				ap, capturedExtraFloat, overExtPlan.Leadtime())
+				ap, overFloat, overLeadtime)
 		}
 	}
+}
+
+func planWithExtraVolume(t *testing.T, env *Env, searchFunc SearchWithPrefixFunc, basePlan *Plan, ap pfd.AtomicProcessID, extraVolume Volume) *Plan {
+	t.Helper()
+
+	initVolumeFunc := env.InitialVolumeFunc
+	envExtended := env.Clone()
+	envExtended.InitialVolumeFunc = func(ap2 pfd.AtomicProcessID) Volume {
+		if ap2 == ap {
+			return initVolumeFunc(ap2) + extraVolume
+		}
+		return initVolumeFunc(ap2)
+	}
+
+	plans, err := searchFunc(envExtended, PrefixUntilProcessStart(basePlan, ap))
+	if err != nil {
+		t.Fatalf("extending %s by %v: %v", ap, extraVolume, err)
+	}
+	plan, ok := plans.At(0)
+	if !ok {
+		t.Fatalf("extending %s by %v: no plan found", ap, extraVolume)
+	}
+	return plan
 }

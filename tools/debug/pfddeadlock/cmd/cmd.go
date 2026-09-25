@@ -16,6 +16,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "PFD におけるデッドロックを検出します。（デバッグ用）"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	options, err := ParseOptions(args, inout)
 	if err != nil {
@@ -32,6 +34,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 	if options.CommonOptions.Help {
+		return nil
+	}
+
+	if options.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 

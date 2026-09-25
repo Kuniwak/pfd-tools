@@ -7,7 +7,9 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
+	"github.com/Kuniwak/pfd-tools/mastertsv"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/slogtest"
@@ -22,7 +24,7 @@ func TestConsistentMTable(t *testing.T) {
 	}{
 		"ng (missing successor)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.MilestoneColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.BarColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"M1"}},
 					{ID: "P2", Description: "Atomic Process 2", ExtraCells: []string{"M2"}},
@@ -48,7 +50,7 @@ func TestConsistentMTable(t *testing.T) {
 		},
 		"ng (missing)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.MilestoneColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.BarColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"M1"}},
 				},
@@ -63,7 +65,7 @@ func TestConsistentMTable(t *testing.T) {
 		},
 		"ng (extra)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.MilestoneColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.BarColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"M1"}},
 				},
@@ -81,7 +83,7 @@ func TestConsistentMTable(t *testing.T) {
 		},
 		"ok": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.MilestoneColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.BarColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"M1"}},
 				},
@@ -102,7 +104,7 @@ func TestConsistentMTable(t *testing.T) {
 			if err != nil {
 				t.Fatalf("fsmcommon.NewMemoized: %v", err)
 			}
-			tgt := fsmcommon.NewTarget(nil, tt.AtomicProcessTable, nil, nil, tt.MilestoneTable, nil, m, logger)
+			tgt := &fsmcommon.Target{AtomicProcessTable: tt.AtomicProcessTable, MilestoneTable: tt.MilestoneTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: logger}
 			if !ConsistentMTable.AvailableIfFunc(tgt) {
 				t.Fatalf("ConsistentMTable.AvailableIfFunc: %v", ConsistentMTable.AvailableIfFunc(tgt))
 			}

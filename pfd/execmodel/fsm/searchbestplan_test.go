@@ -7,6 +7,7 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/cmp2"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/pfdfuzz"
 	"github.com/Kuniwak/pfd-tools/sets"
 	"github.com/Kuniwak/pfd-tools/slogtest"
 	"github.com/google/go-cmp/cmp"
@@ -14,9 +15,7 @@ import (
 )
 
 func TestSearchBestPlans(t *testing.T) {
-	// [D1] -> (P1) -> [D2] -> (P3) -> [D4]
-	//      \
-	//       +-> (P2) -> [D3]
+
 	p := newSafePFDByUnsafePFD(&pfd.PFD{
 		Nodes: sets.New(
 			(*pfd.Node).Compare,
@@ -130,7 +129,7 @@ func TestSearchBestPlansPreset(t *testing.T) {
 
 func FuzzSearchBestPlans(t *testing.F) {
 	t.Fuzz(rapid.MakeFuzz(func(t *rapid.T) {
-		up := pfd.AnyValidPFD(t, 100)
+		up := pfdfuzz.AnyValidPFD(t, 100)
 		p := newSafePFDByUnsafePFD(up)
 		logger := slog.New(slogtest.NewRapidHandler(t))
 		initVolumeFunc := ConstInitialVolumeFunc(Volume(2))

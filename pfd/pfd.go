@@ -3,6 +3,7 @@ package pfd
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/Kuniwak/pfd-tools/graph"
@@ -16,6 +17,8 @@ type PFD struct {
 	Edges                  *sets.Set[*Edge]             `json:"edges,omitempty"`
 	ProcessComposition     map[NodeID]*sets.Set[NodeID] `json:"process_composition,omitempty"`
 	DeliverableComposition map[NodeID]*sets.Set[NodeID] `json:"deliverable_composition,omitempty"`
+
+	ImplicitAtomicProcesses *sets.Set[NodeID] `json:"implicit_atomic_processes,omitempty"`
 }
 
 func NewPFD(
@@ -34,12 +37,14 @@ func NewPFD(
 	}
 }
 
-// GraphExceptFeedback returns a graph excluding feedback edges and compound processes.
 func (p *PFD) GraphExceptFeedback(nodeMap map[NodeID]*Node, logger *slog.Logger) *graph.Graph {
 	footprint := sets.NewWithCapacity[NodeID](p.Nodes.Len())
 
 	nodes := sets.NewWithCapacity[graph.Node](p.Nodes.Len())
 	for _, node := range p.Nodes.Iter() {
+		if p.IsExpandedCompositeDeliverable(node.ID) {
+			continue
+		}
 		if node.Type == NodeTypeCompositeProcess {
 			continue
 		}
@@ -53,6 +58,10 @@ func (p *PFD) GraphExceptFeedback(nodeMap map[NodeID]*Node, logger *slog.Logger)
 	edges := sets.NewWithCapacity[*pairs.Pair[graph.Node, graph.Node]](p.Edges.Len())
 	for _, edge := range p.Edges.Iter() {
 		if edge.IsFeedback {
+			continue
+		}
+
+		if p.IsExpandedCompositeDeliverable(edge.Source) || p.IsExpandedCompositeDeliverable(edge.Target) {
 			continue
 		}
 
@@ -91,6 +100,10 @@ func (p *PFD) GraphIncludingFeedback(nodeMap map[NodeID]*Node, logger *slog.Logg
 			continue
 		}
 
+		if p.IsExpandedCompositeDeliverable(edge.Source) || p.IsExpandedCompositeDeliverable(edge.Target) {
+			continue
+		}
+
 		src, srcOk := nodeMap[edge.Source]
 		if !srcOk {
 			logger.Warn("GraphIncludingFeedback: missing node", "source", edge.Source)
@@ -112,6 +125,23 @@ func (p *PFD) GraphIncludingFeedback(nodeMap map[NodeID]*Node, logger *slog.Logg
 		g.Edges.Add(pairs.Compare(graph.Node.Compare, graph.Node.Compare), pairs.New(graph.Node(edge.Source), graph.Node(edge.Target)))
 	}
 	return g
+}
+
+func (p *PFD) IsExpandedCompositeDeliverable(id NodeID) bool {
+	_, ok := p.DeliverableComposition[id]
+	return ok
+}
+
+func (p *PFD) ExpandCompositeDeliverables(s *sets.Set[NodeID]) *sets.Set[NodeID] {
+	expanded := sets.NewWithCapacity[NodeID](s.Len())
+	for _, id := range s.Iter() {
+		if members, ok := p.DeliverableComposition[id]; ok {
+			expanded.Union(NodeID.Compare, members)
+			continue
+		}
+		expanded.Add(NodeID.Compare, id)
+	}
+	return expanded
 }
 
 func (p *PFD) InputsIncludingFeedback(n NodeID) *sets.Set[NodeID] {
@@ -180,6 +210,23 @@ func (p *PFD) OutputsOnlyFeedback(n NodeID) *sets.Set[NodeID] {
 	return outputs
 }
 
+func (p *PFD) ProducingAtomicProcess(deliverable NodeID, nodeMap map[NodeID]*Node, exclude ...NodeID) (NodeID, bool) {
+	for _, src := range p.InputsIncludingFeedback(deliverable).Iter() {
+		if src == NodeIDContextDiagram {
+			continue
+		}
+		if slices.Contains(exclude, src) {
+			continue
+		}
+		node, ok := nodeMap[src]
+		if !ok || node.Type != NodeTypeAtomicProcess {
+			continue
+		}
+		return src, true
+	}
+	return "", false
+}
+
 func (p *PFD) InitialAtomicDeliverables(nodeMap map[NodeID]*Node, logger *slog.Logger) *sets.Set[NodeID] {
 	initials := sets.NewWithCapacity[NodeID](p.Nodes.Len())
 	minimals := p.GraphExceptFeedback(nodeMap, logger).Minimals()
@@ -243,20 +290,17 @@ func (t NodeType) Compare(other NodeType) int {
 	return strings.Compare(string(t), string(other))
 }
 
-// Node is a PFD element. Description may be empty with the description stored in ID instead.
 type Node struct {
 	ID          NodeID   `json:"id"`
 	Description string   `json:"desc"`
 	Type        NodeType `json:"type"`
 }
 
-// HasID returns true if the element has an ID, otherwise returns false.
 func (n *Node) HasID() bool {
-	// NOTE: Due to parsing constraints, when there is no ID, the description is stored in ID. In that case, the description is empty, so this is used for determination.
+
 	return n.Description != ""
 }
 
-// HasDescription returns true if the element has a description, otherwise returns false.
 func (n *Node) HasDescription() bool {
 	return n.HasID()
 }

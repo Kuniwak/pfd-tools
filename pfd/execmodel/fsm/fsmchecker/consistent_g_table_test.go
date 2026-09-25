@@ -7,7 +7,9 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
+	"github.com/Kuniwak/pfd-tools/mastertsv"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/slogtest"
@@ -22,7 +24,7 @@ func TestConsistentGTable(t *testing.T) {
 	}{
 		"ng (missing)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.GroupColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.RowColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"G1,G2"}},
 				},
@@ -39,7 +41,7 @@ func TestConsistentGTable(t *testing.T) {
 		},
 		"ng (extra)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.GroupColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.RowColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"G1"}},
 				},
@@ -57,7 +59,7 @@ func TestConsistentGTable(t *testing.T) {
 		},
 		"ok (not empty)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.GroupColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.RowColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{"G1,G2"}},
 				},
@@ -73,7 +75,7 @@ func TestConsistentGTable(t *testing.T) {
 		},
 		"ok (empty)": {
 			AtomicProcessTable: &pfd.AtomicProcessTable{
-				ExtraHeaders: []string{fsmtable.GroupColumnHeaderEn},
+				ExtraHeaders: []string{mastertsv.RowColumnHeader},
 				Rows: []*pfd.AtomicProcessRow{
 					{ID: "P1", Description: "Atomic Process 1", ExtraCells: []string{""}},
 				},
@@ -93,7 +95,7 @@ func TestConsistentGTable(t *testing.T) {
 				t.Fatalf("fsmcommon.NewMemoized: %v", err)
 			}
 
-			tgt := fsmcommon.NewTarget(nil, tt.AtomicProcessTable, nil, nil, nil, tt.GroupTable, m, logger)
+			tgt := &fsmcommon.Target{AtomicProcessTable: tt.AtomicProcessTable, GroupTable: tt.GroupTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: logger}
 			if !ConsistentGTable.AvailableIfFunc(tgt) {
 				t.Fatalf("ConsistentGTable.AvailableIfFunc: %v", ConsistentGTable.AvailableIfFunc(tgt))
 			}

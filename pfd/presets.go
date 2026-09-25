@@ -15,11 +15,9 @@ var PresetsAll = map[string]*PFD{
 	"nested_loop":                             PresetNestedLoop,
 	"butterfly_loop":                          PresetButterflyLoop,
 	"cross_loop":                              PresetCrossLoop,
+	"composite_deliverable":                   PresetCompositeDeliverable,
 }
 
-// PresetSmallest is a PFD like:
-//
-//	[D1] -> (P1) -> [D2]
 var PresetSmallest = &PFD{
 	Title: "Smallest",
 	Nodes: sets.New(
@@ -35,9 +33,6 @@ var PresetSmallest = &PFD{
 	),
 }
 
-// PresetSequential is a PFD like:
-//
-//	[D1] -> (P1) -> [D2] -> (P2) -> [D3]
 var PresetSequential = &PFD{
 	Title: "Sequential",
 	Nodes: sets.New(
@@ -57,12 +52,6 @@ var PresetSequential = &PFD{
 	),
 }
 
-// PresetCounterclockwiseRotatedYShape is a PFD like:
-//
-//	[D1] -> (P1) -> [D3]
-//	       ^
-//	      /
-//	[D2] +
 var PresetCounterclockwiseRotatedYShape = &PFD{
 	Title: "CounterclockwiseRotatedYShape",
 	Nodes: sets.New(
@@ -80,11 +69,6 @@ var PresetCounterclockwiseRotatedYShape = &PFD{
 	),
 }
 
-// PresetClockwiseRotatedYShape is a PFD like:
-//
-//	[D1] -> (P1) -> [D2]
-//	           \
-//	            +-> [D3]
 var PresetClockwiseRotatedYShape = &PFD{
 	Title: "ClockwiseRotatedYShape",
 	Nodes: sets.New(
@@ -102,12 +86,6 @@ var PresetClockwiseRotatedYShape = &PFD{
 	),
 }
 
-// PresetBiggerCounterclockwiseRotatedYShape is a PFD like:
-//
-//	[D1] -> (P1) -> [D3] -> (P3) -> [D5]
-//	                        ^
-//	                       /
-//	[D2] -> (P2) -> [D4] -+
 var PresetBiggerCounterclockwiseRotatedYShape = &PFD{
 	Title: "BiggerCounterclockwiseRotatedYShape",
 	Nodes: sets.New(
@@ -133,11 +111,6 @@ var PresetBiggerCounterclockwiseRotatedYShape = &PFD{
 	),
 }
 
-// PresetBiggerClockwiseRotatedYShape is a PFD like:
-//
-//	[D1] -> (P1) -> [D2] -> (P2) -> [D3]
-//	                   \
-//	                    +-> (P3) -> [D4]
 var PresetBiggerClockwiseRotatedYShape = &PFD{
 	Title: "BiggerClockwiseRotatedYShape",
 	Nodes: sets.New(
@@ -161,12 +134,6 @@ var PresetBiggerClockwiseRotatedYShape = &PFD{
 	),
 }
 
-// PresetSmallestLoop is a PFD like:
-//
-//	.
-//	            - - -
-//	           V     \
-//	[D1] -> (P1) -> [D2]
 var PresetSmallestLoop = &PFD{
 	Title: "SmallestLoop",
 	Nodes: sets.New(
@@ -183,12 +150,6 @@ var PresetSmallestLoop = &PFD{
 	),
 }
 
-// PresetNestedLoop is a PFD like:
-//
-//		[D1] -> (P1) -> [D2] -> (P2) -> [D3] -> (P3) -> [D4]
-//	            ^               ^       /              /
-//	             \               - - - -              /
-//	              - - - - - - - - - - - - - - - - - -
 var PresetNestedLoop = &PFD{
 	Title: "NestedLoop",
 	Nodes: sets.New(
@@ -214,17 +175,6 @@ var PresetNestedLoop = &PFD{
 	),
 }
 
-// PresetButterflyLoop is a PFD like:
-//
-//	.         - - - - - - - - - - - - -
-//	         /                          \
-//	        /    +--> [D2] -> (P2) -> [D4]
-//	       V    /
-//	[D1] -> (P1)
-//	       ^    \
-//	        \    +--> [D3] -> (P3) -> [D5]
-//	         \                          /
-//	          - - - - - - - - - - - - -
 var PresetButterflyLoop = &PFD{
 	Title: "ButterflyLoop",
 	Nodes: sets.New(
@@ -252,12 +202,6 @@ var PresetButterflyLoop = &PFD{
 	),
 }
 
-// PresetCrossLoop is a PFD like:
-//
-//	.                          + - - - - - - - +
-//	         - - - - - - - - - - +              \
-//	        V                V    \              \
-//	[D1] -> (P1) -> [D2] -> (P2) -> [D3] -> (P3) -> [D4]
 var PresetCrossLoop = &PFD{
 	Title: "CrossLoop",
 	Nodes: sets.New(
@@ -283,11 +227,6 @@ var PresetCrossLoop = &PFD{
 	),
 }
 
-// PresetWaitLoopEnd is a PFD like:
-//
-//	 .             - - -
-//	              V     \
-//		[D1] -> (P1) -> [D2] -> (P2) -> [D3]
 var PresetWaitLoopEnd = &PFD{
 	Title: "WaitLoopEnd",
 	Nodes: sets.New(
@@ -308,13 +247,6 @@ var PresetWaitLoopEnd = &PFD{
 	),
 }
 
-// PresetTripleBranch is a PFD like:
-//
-//	[D1] ---> (P1) ---> [D2]
-//	    \
-//	     +---> (P2) ---> [D3]
-//	      \
-//	       +---> (P3) ---> [D4]
 var PresetTripleBranch = &PFD{
 	Title: "TripleBranch",
 	Nodes: sets.New(
@@ -337,3 +269,30 @@ var PresetTripleBranch = &PFD{
 		&Edge{Source: "P3", Target: "D4"},
 	),
 }
+
+var PresetCompositeDeliverable = MustSetExpandedDeliverableComposition(
+	&PFD{
+		Title: "Composite deliverable",
+		Nodes: sets.New(
+			(*Node).Compare,
+			&Node{ID: "D1", Description: "D1", Type: NodeTypeAtomicDeliverable},
+			&Node{ID: "D2", Description: "D2", Type: NodeTypeAtomicDeliverable},
+			&Node{ID: "D3", Description: "D3", Type: NodeTypeAtomicDeliverable},
+			&Node{ID: "D4", Description: "D4", Type: NodeTypeCompositeDeliverable},
+			&Node{ID: "D5", Description: "D5", Type: NodeTypeAtomicDeliverable},
+			&Node{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
+			&Node{ID: "P2", Description: "P2", Type: NodeTypeAtomicProcess},
+		),
+		Edges: sets.New(
+			(*Edge).Compare,
+			&Edge{Source: "D1", Target: "P1"},
+			&Edge{Source: "P1", Target: "D2"},
+			&Edge{Source: "P1", Target: "D3"},
+			&Edge{Source: "D4", Target: "P2"},
+			&Edge{Source: "P2", Target: "D5"},
+		),
+	},
+	map[NodeID]*sets.Set[NodeID]{
+		"D4": sets.New(NodeID.Compare, "D2", "D3"),
+	},
+)

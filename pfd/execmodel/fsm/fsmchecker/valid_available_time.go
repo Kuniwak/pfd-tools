@@ -16,7 +16,7 @@ var ValidAvailableTime = checkers.AtomicChecker[*fsmcommon.Target]{
 		for _, d := range t.PFD.InitialDeliverables().Iter() {
 			availableTimeText, ok := t.Memoized.AvailableTimeMap[d]
 			if !ok {
-				// NOTE: Skip because it will be reported by consistent-d-table.
+
 				continue
 			}
 			if _, err := fsmtable.ValidateAvailableTime(availableTimeText); err != nil {

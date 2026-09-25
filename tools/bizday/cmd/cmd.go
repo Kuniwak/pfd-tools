@@ -8,6 +8,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "指定された時刻が営業時間内で何日目に相当するかを計算します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	options, err := ParseOptions(args, inout)
 	if err != nil {
@@ -23,6 +25,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 	if options.CommonOptions.Help {
+		return nil
+	}
+
+	if options.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 	if options.CommonOptions.Version {

@@ -8,7 +8,6 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// DeliverableAvailableTimeFunc returns the available time of initial deliverables. Behavior is undefined when given an ID of an element that is not an initial deliverable.
 type DeliverableAvailableTimeFunc func(pfd.AtomicDeliverableID) execmodel.Time
 
 func ConstDeliverableAvailableTimeFunc(t execmodel.Time) DeliverableAvailableTimeFunc {

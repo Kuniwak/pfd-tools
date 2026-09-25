@@ -19,6 +19,20 @@ var (
 	newLine = []byte{'\n'}
 )
 
+func ReportProblems(reporterFunc Func, problems ...checkers.Problem) (int, error) {
+	ch := make(chan checkers.Problem, len(problems))
+	for _, problem := range problems {
+		ch <- problem
+	}
+	close(ch)
+
+	count, err := reporterFunc(ch)
+	if err != nil {
+		return 0, fmt.Errorf("allcheckers.ReportProblems: %w", err)
+	}
+	return count, nil
+}
+
 func NewSorted(reporterFunc Func) Func {
 	sb := &strings.Builder{}
 	return func(ch <-chan checkers.Problem) (int, error) {

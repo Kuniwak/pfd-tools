@@ -8,10 +8,9 @@ import (
 	"github.com/Kuniwak/pfd-tools/pfd"
 )
 
-// Volume is the work volume.
 type Volume float64
 
-const MinimumVolume = 0.001 // Approximately equivalent to 30 people (calculated as 9 hours per business day)
+const MinimumVolume = 0.001
 
 func (v Volume) String() string {
 	if v.IsZero() {
@@ -28,8 +27,6 @@ func (v Volume) ApproximateEqual(b Volume) bool {
 	return math.Abs(float64(v-b)) < MinimumVolume
 }
 
-// InitialVolumeFunc returns the required work volume for an atomic process when given that atomic process.
-// Behavior is undefined when given an ID of an element that is not an atomic process.
 type InitialVolumeFunc func(pfd.AtomicProcessID) Volume
 
 func InitialVolumeByMap(m map[pfd.AtomicProcessID]Volume) InitialVolumeFunc {
@@ -48,9 +45,6 @@ func ConstInitialVolumeFunc(volume Volume) InitialVolumeFunc {
 	}
 }
 
-// ReworkVolumeFunc returns the work volume that is recovered when feedback edge deliverables are
-// created or recreated, given an atomic process that receives feedback edges and the number of reworks for that atomic process.
-// Behavior is undefined when given an element that is not an atomic process receiving feedback edges, or when given a non-positive numOfRework.
 type ReworkVolumeFunc func(ap pfd.AtomicProcessID, numOfRework int) Volume
 
 func ReworkVolumeByMaxReworksMap(m map[pfd.AtomicProcessID]ReworkVolumeFunc) ReworkVolumeFunc {
@@ -61,6 +55,12 @@ func ReworkVolumeByMaxReworksMap(m map[pfd.AtomicProcessID]ReworkVolumeFunc) Rew
 		}
 
 		return f(ap, numOfRework)
+	}
+}
+
+func NoReworkVolumeFunc(init InitialVolumeFunc) ReworkVolumeFunc {
+	return func(ap pfd.AtomicProcessID, _ int) Volume {
+		return init(ap)
 	}
 }
 

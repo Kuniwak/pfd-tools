@@ -3,6 +3,7 @@ package pfd
 import (
 	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Kuniwak/pfd-tools/cmp2"
@@ -490,6 +491,145 @@ func TestSafePFD(t *testing.T) {
 	}
 }
 
+func TestSafePFDCompositeDeliverableExpansion(t *testing.T) {
+	nodes := []*Node{
+		{ID: "D0", Description: "D0", Type: NodeTypeAtomicDeliverable},
+		{ID: "D1", Description: "D1", Type: NodeTypeAtomicDeliverable},
+		{ID: "D2", Description: "D2", Type: NodeTypeAtomicDeliverable},
+		{ID: "D3", Description: "D3", Type: NodeTypeCompositeDeliverable},
+		{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
+	}
+
+	testCases := map[string]struct {
+		Edges           []*Edge
+		ExpectedInputs  []AtomicDeliverableID
+		ExpectedOutputs []AtomicDeliverableID
+	}{
+		"output side: atomic process -> composite deliverable": {
+			Edges: []*Edge{
+				{Source: "D0", Target: "P1"},
+				{Source: "P1", Target: "D3"},
+			},
+			ExpectedInputs:  []AtomicDeliverableID{"D0"},
+			ExpectedOutputs: []AtomicDeliverableID{"D1", "D2"},
+		},
+		"input side: composite deliverable -> atomic process": {
+			Edges: []*Edge{
+				{Source: "D3", Target: "P1"},
+				{Source: "P1", Target: "D0"},
+			},
+			ExpectedInputs:  []AtomicDeliverableID{"D1", "D2"},
+			ExpectedOutputs: []AtomicDeliverableID{"D0"},
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			p := &PFD{
+				Nodes:              sets.New((*Node).Compare, nodes...),
+				Edges:              sets.New((*Edge).Compare, tc.Edges...),
+				ProcessComposition: map[NodeID]*sets.Set[NodeID]{},
+				DeliverableComposition: map[NodeID]*sets.Set[NodeID]{
+					"D3": sets.New(NodeID.Compare, "D1", "D2"),
+				},
+			}
+
+			v, err := NewSafePFDByUnsafePFD(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(v.Relations["P1"].Inputs.Slice(), tc.ExpectedInputs) {
+				t.Errorf("inputs = %v, want %v", v.Relations["P1"].Inputs.Slice(), tc.ExpectedInputs)
+			}
+			if !reflect.DeepEqual(v.Relations["P1"].Outputs.Slice(), tc.ExpectedOutputs) {
+				t.Errorf("outputs = %v, want %v", v.Relations["P1"].Outputs.Slice(), tc.ExpectedOutputs)
+			}
+			for _, d := range tc.ExpectedOutputs {
+				if ap := v.Memoized.SourceAtomicProcess[d]; ap != "P1" {
+					t.Errorf("SourceAtomicProcess[%q] = %q, want %q", d, ap, "P1")
+				}
+			}
+		})
+	}
+}
+
+func TestSafePFDError(t *testing.T) {
+	testCases := map[string]struct {
+		PFD      *PFD
+		Contains string
+	}{
+
+		"composite deliverable without a composite deliverable table entry": {
+			PFD: &PFD{
+				Nodes: sets.New(
+					(*Node).Compare,
+					&Node{ID: "D0", Description: "D0", Type: NodeTypeCompositeDeliverable},
+					&Node{ID: "D1", Description: "D1", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
+				),
+				Edges: sets.New(
+					(*Edge).Compare,
+					&Edge{Source: "D0", Target: "P1"},
+					&Edge{Source: "P1", Target: "D1"},
+				),
+				ProcessComposition:     map[NodeID]*sets.Set[NodeID]{},
+				DeliverableComposition: map[NodeID]*sets.Set[NodeID]{},
+			},
+			Contains: "composite deliverable",
+		},
+
+		"feedback edge from an atomic process to an atomic deliverable": {
+			PFD: &PFD{
+				Nodes: sets.New(
+					(*Node).Compare,
+					&Node{ID: "D1", Description: "D1", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
+				),
+				Edges: sets.New(
+					(*Edge).Compare,
+					&Edge{Source: "P1", Target: "D1", IsFeedback: true},
+				),
+				ProcessComposition:     map[NodeID]*sets.Set[NodeID]{},
+				DeliverableComposition: map[NodeID]*sets.Set[NodeID]{},
+			},
+			Contains: `atomic process: "P1" is connected to deliverable: "D1" with feedback edge`,
+		},
+
+		"feedback edge from an atomic process to a composite deliverable": {
+			PFD: &PFD{
+				Nodes: sets.New(
+					(*Node).Compare,
+					&Node{ID: "D1", Description: "D1", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "D3", Description: "D3", Type: NodeTypeCompositeDeliverable},
+					&Node{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
+				),
+				Edges: sets.New(
+					(*Edge).Compare,
+					&Edge{Source: "P1", Target: "D3", IsFeedback: true},
+				),
+				ProcessComposition: map[NodeID]*sets.Set[NodeID]{},
+				DeliverableComposition: map[NodeID]*sets.Set[NodeID]{
+					"D3": sets.New(NodeID.Compare, "D1"),
+				},
+			},
+			Contains: `atomic process: "P1" is connected to deliverable: "D3" with feedback edge`,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewSafePFDByUnsafePFD(tc.PFD)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.Contains) {
+				t.Errorf("error should contain %q, got: %v", tc.Contains, err)
+			}
+		})
+	}
+}
+
 func TestCollectPaths(t *testing.T) {
 	testCases := map[string]struct {
 		PFD      *PFD
@@ -499,13 +639,7 @@ func TestCollectPaths(t *testing.T) {
 	}{
 		"example": {
 			PFD: &PFD{
-				//            - - -
-				//           V     \
-				// [D1] -> (P1) -> [D5]
-				//           \
-				//            +->  [D2] ->  (P2) -> [D3] -> (P3) -> [D4]
-				//                    \                      ^
-				//                     +->  (P4) -> [D6] ---+
+
 				Nodes: sets.New(
 					(*Node).Compare,
 					&Node{ID: "P1", Description: "P1", Type: NodeTypeAtomicProcess},
@@ -566,10 +700,7 @@ func TestCollectReachableDeliverables(t *testing.T) {
 		Expected *sets.Set[AtomicDeliverableID]
 	}{
 		"example": {
-			//                                    - - - - - - - - - - - - - - - - - - - - -
-			//               - - -              /                    - - -                  \
-			//             V       \           V                   V       \                 \
-			// [D1] ---> (P1) ---> [D2] ---> (P2) ---> [D3] ---> (P3) ---> [D4] --> (P4) --> [D5]
+
 			PFD: NewSafePFD(
 				map[AtomicProcessID]string{
 					"P1": "P1",
@@ -623,6 +754,59 @@ func TestCollectReachableDeliverables(t *testing.T) {
 			testCase.PFD.CollectReachableDeliverablesExceptFeedback(testCase.Src, actual, slog.New(slogtest.NewTestHandler(t)))
 			if !reflect.DeepEqual(actual, testCase.Expected) {
 				t.Error(cmp.Diff(testCase.Expected, actual))
+			}
+		})
+	}
+}
+
+func TestFeedbackEdges(t *testing.T) {
+	testCases := map[string]struct {
+		PFD      *PFD
+		Expected []FeedbackEdge
+	}{
+		"no feedback edge": {
+
+			PFD:      PresetSmallest,
+			Expected: []FeedbackEdge{},
+		},
+		"a single feedback edge": {
+
+			PFD:      PresetSmallestLoop,
+			Expected: []FeedbackEdge{{AtomicDeliverable: "D2", AtomicProcess: "P1"}},
+		},
+		"feedback edges are sorted by deliverable then atomic process": {
+
+			PFD: &PFD{
+				Nodes: sets.New(
+					(*Node).Compare,
+					&Node{ID: "D1", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "D2", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "D3", Type: NodeTypeAtomicDeliverable},
+					&Node{ID: "P1", Type: NodeTypeAtomicProcess},
+					&Node{ID: "P2", Type: NodeTypeAtomicProcess},
+				),
+				Edges: sets.New(
+					(*Edge).Compare,
+					&Edge{Source: "D1", Target: "P1"},
+					&Edge{Source: "P1", Target: "D2"},
+					&Edge{Source: "D2", Target: "P2"},
+					&Edge{Source: "P2", Target: "D3"},
+					&Edge{Source: "D3", Target: "P1", IsFeedback: true},
+					&Edge{Source: "D2", Target: "P1", IsFeedback: true},
+				),
+			},
+			Expected: []FeedbackEdge{
+				{AtomicDeliverable: "D2", AtomicProcess: "P1"},
+				{AtomicDeliverable: "D3", AtomicProcess: "P1"},
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			actual := MustNewSafePFDByUnsafePFD(tc.PFD).FeedbackEdges()
+			if !reflect.DeepEqual(actual, tc.Expected) {
+				t.Error(cmp.Diff(tc.Expected, actual))
 			}
 		})
 	}

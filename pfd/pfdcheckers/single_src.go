@@ -23,11 +23,11 @@ var SingleSrc = checkers.AtomicChecker[pfdcommon.Target]{
 			for _, edge := range t.PFD.Edges.Iter() {
 				src, srcOk := t.Memoized.NodeMap[edge.Source]
 				if !srcOk {
-					// NOTE: Skip as it will be caught by in-field.
+
 					continue
 				}
 				if src.Type == pfd.NodeTypeCompositeProcess {
-					// NOTE: Skip composite processes as they duplicate outputs of their contained atomic processes.
+
 					continue
 				}
 

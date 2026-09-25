@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/Kuniwak/pfd-tools/bizday"
+	"github.com/Kuniwak/pfd-tools/emphasis"
+	"github.com/Kuniwak/pfd-tools/ganttaxis"
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm"
@@ -21,8 +23,12 @@ import (
 
 type GoogleSpreadsheetTimelineTable []GoogleSpreadsheetTimelineTableRow
 
-func (g GoogleSpreadsheetTimelineTable) Headers() []string {
-	return []string{"AtomicProcess", "NumOfComplete", "AllocatedResources", "Description", "StartTime", "EndTime", "Start", "End"}
+func (g GoogleSpreadsheetTimelineTable) Headers(em *emphasis.Set) []string {
+	headers := []string{"AtomicProcess", "NumOfComplete", "AllocatedResources", "Description", "StartTime", "EndTime", "Start", "End"}
+	if !em.Enabled() {
+		return headers
+	}
+	return append(headers, emphasis.ColumnHeader)
 }
 
 type GoogleSpreadsheetTimelineTableRow struct {
@@ -48,7 +54,7 @@ func (r GoogleSpreadsheetTimelineTableRow) Compare(b GoogleSpreadsheetTimelineTa
 	return cmp.Compare(r.AtomicProcess, b.AtomicProcess)
 }
 
-func (r GoogleSpreadsheetTimelineTableRow) Values(sb *strings.Builder) []string {
+func (r GoogleSpreadsheetTimelineTableRow) Values(sb *strings.Builder, em *emphasis.Set) []string {
 	sb.Reset()
 	for i, resource := range r.AllocatedResources.Iter() {
 		if i > 0 {
@@ -56,17 +62,38 @@ func (r GoogleSpreadsheetTimelineTableRow) Values(sb *strings.Builder) []string 
 		}
 		sb.WriteString(string(resource))
 	}
-	return []string{string(r.AtomicProcess), strconv.Itoa(r.NumOfReworks), sb.String(), r.Description, r.StartTime.Format(time.DateTime), r.EndTime.Format(time.DateTime), strconv.FormatFloat(float64(r.Start), 'f', -1, 64), strconv.FormatFloat(float64(r.End), 'f', -1, 64)}
+	values := []string{string(r.AtomicProcess), strconv.Itoa(r.NumOfReworks), sb.String(), r.Description, r.StartTime.Format(time.DateTime), r.EndTime.Format(time.DateTime), strconv.FormatFloat(float64(r.Start), 'f', -1, 64), strconv.FormatFloat(float64(r.End), 'f', -1, 64)}
+	if !em.Enabled() {
+		return values
+	}
+	if em.Contains(string(r.AtomicProcess)) {
+		return append(values, emphasis.TrueValue)
+	}
+	return append(values, "")
 }
 
 type PlanReporter func(w io.Writer, plan *fsm.Plan, descMap map[pfd.AtomicProcessID]string) error
 
-func NewGoogleSpreadsheetTimelineTSVReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, logger *slog.Logger) PlanReporter {
+func NewGoogleSpreadsheetTimelineTSVReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, em *emphasis.Set, logger *slog.Logger) PlanReporter {
 	return func(w io.Writer, plan *fsm.Plan, descMap map[pfd.AtomicProcessID]string) error {
-		tt := BuildTimelineTable(plan, logger)
-		t := BuildGoogleSpreadsheetTimelineTable(tt, startDay, bizTimeFunc, descMap)
-		return TimelineTableToGoogleSpreadsheetTimelineTSV(w, t)
+		t := BuildEmphasizedTimelineTable(plan, startDay, bizTimeFunc, descMap, em, logger)
+		return TimelineTableToGoogleSpreadsheetTimelineTSV(w, t, em)
 	}
+}
+
+func BuildEmphasizedTimelineTable(plan *fsm.Plan, startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, descMap map[pfd.AtomicProcessID]string, em *emphasis.Set, logger *slog.Logger) GoogleSpreadsheetTimelineTable {
+	tt := BuildTimelineTable(plan, logger)
+	t := GoogleSpreadsheetTimelineTable(BuildGoogleSpreadsheetTimelineTable(tt, startDay, bizTimeFunc, descMap))
+	em.WarnUnknownIDs(logger, t.AtomicProcessIDs())
+	return t
+}
+
+func (g GoogleSpreadsheetTimelineTable) AtomicProcessIDs() []string {
+	ids := make([]string, 0, len(g))
+	for _, row := range g {
+		ids = append(ids, string(row.AtomicProcess))
+	}
+	return ids
 }
 
 func BuildGoogleSpreadsheetTimelineTable(tt TimelineTable, startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, descMap map[pfd.AtomicProcessID]string) []GoogleSpreadsheetTimelineTableRow {
@@ -92,14 +119,14 @@ func BuildGoogleSpreadsheetTimelineTable(tt TimelineTable, startDay bizday.Day, 
 	return t
 }
 
-func TimelineTableToGoogleSpreadsheetTimelineTSV(w io.Writer, t GoogleSpreadsheetTimelineTable) error {
+func TimelineTableToGoogleSpreadsheetTimelineTSV(w io.Writer, t GoogleSpreadsheetTimelineTable, em *emphasis.Set) error {
 	csvWriter := csv.NewWriter(w)
 	csvWriter.Comma = '\t'
-	csvWriter.Write(t.Headers())
+	csvWriter.Write(t.Headers(em))
 
 	sb := &strings.Builder{}
 	for _, row := range t {
-		csvWriter.Write(row.Values(sb))
+		csvWriter.Write(row.Values(sb, em))
 	}
 	csvWriter.Flush()
 	if err := csvWriter.Error(); err != nil {
@@ -108,18 +135,18 @@ func TimelineTableToGoogleSpreadsheetTimelineTSV(w io.Writer, t GoogleSpreadshee
 	return nil
 }
 
-func NewMermaidGanttReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, logger *slog.Logger) PlanReporter {
+func NewMermaidGanttReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, em *emphasis.Set, logger *slog.Logger) PlanReporter {
 	return func(w io.Writer, plan *fsm.Plan, descMap map[pfd.AtomicProcessID]string) error {
-		tt := BuildTimelineTable(plan, logger)
-		gtt := BuildGoogleSpreadsheetTimelineTable(tt, startDay, bizTimeFunc, descMap)
-		return TimelineTableToMermaidGantt(w, gtt)
+		gtt := BuildEmphasizedTimelineTable(plan, startDay, bizTimeFunc, descMap, em, logger)
+		return TimelineTableToMermaidGantt(w, gtt, em)
 	}
 }
 
 const mermaidTimeFormat = "2006-01-02 15:04"
 
-func TimelineTableToMermaidGantt(w io.Writer, t GoogleSpreadsheetTimelineTable) error {
-	if _, err := fmt.Fprint(w, "gantt\n    dateFormat YYYY-MM-DD HH:mm\n"); err != nil {
+func TimelineTableToMermaidGantt(w io.Writer, t GoogleSpreadsheetTimelineTable, em *emphasis.Set) error {
+	minStart, maxEnd := ganttaxis.Span(t, func(row GoogleSpreadsheetTimelineTableRow) time.Time { return row.StartTime }, func(row GoogleSpreadsheetTimelineTableRow) time.Time { return row.EndTime })
+	if _, err := fmt.Fprint(w, ganttaxis.Header(minStart, maxEnd)); err != nil {
 		return fmt.Errorf("fsmreporter.TimelineTableToMermaidGantt: %w", err)
 	}
 
@@ -139,7 +166,11 @@ func TimelineTableToMermaidGantt(w io.Writer, t GoogleSpreadsheetTimelineTable) 
 			}
 			sb.WriteString(string(resource))
 		}
-		if _, err := fmt.Fprintf(w, "    %s[%d] %s :%s, %s\n", row.AtomicProcess, row.NumOfReworks, sb.String(), row.StartTime.Format(mermaidTimeFormat), row.EndTime.Format(mermaidTimeFormat)); err != nil {
+		var tags string
+		if em.Contains(string(row.AtomicProcess)) {
+			tags = emphasis.MermaidTag + ", "
+		}
+		if _, err := fmt.Fprintf(w, "    %s[%d] %s :%s%s, %s\n", row.AtomicProcess, row.NumOfReworks, sb.String(), tags, row.StartTime.Format(mermaidTimeFormat), row.EndTime.Format(mermaidTimeFormat)); err != nil {
 			return fmt.Errorf("fsmreporter.TimelineTableToMermaidGantt: %w", err)
 		}
 	}
@@ -147,17 +178,16 @@ func TimelineTableToMermaidGantt(w io.Writer, t GoogleSpreadsheetTimelineTable) 
 	return nil
 }
 
-func NewPlantUMLGanttReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, logger *slog.Logger) PlanReporter {
+func NewPlantUMLGanttReporter(startDay bizday.Day, bizTimeFunc bizday.BusinessTimeFunc, em *emphasis.Set, logger *slog.Logger) PlanReporter {
 	return func(w io.Writer, plan *fsm.Plan, descMap map[pfd.AtomicProcessID]string) error {
-		tt := BuildTimelineTable(plan, logger)
-		gtt := BuildGoogleSpreadsheetTimelineTable(tt, startDay, bizTimeFunc, descMap)
-		return TimelineTableToPlantUMLGantt(w, gtt)
+		gtt := BuildEmphasizedTimelineTable(plan, startDay, bizTimeFunc, descMap, em, logger)
+		return TimelineTableToPlantUMLGantt(w, gtt, em)
 	}
 }
 
 const plantUMLDateFormat = "2006-01-02"
 
-func TimelineTableToPlantUMLGantt(w io.Writer, t GoogleSpreadsheetTimelineTable) error {
+func TimelineTableToPlantUMLGantt(w io.Writer, t GoogleSpreadsheetTimelineTable, em *emphasis.Set) error {
 	if len(t) == 0 {
 		if _, err := fmt.Fprint(w, "@startgantt\n@endgantt\n"); err != nil {
 			return fmt.Errorf("fsmreporter.TimelineTableToPlantUMLGantt: %w", err)
@@ -190,8 +220,14 @@ func TimelineTableToPlantUMLGantt(w io.Writer, t GoogleSpreadsheetTimelineTable)
 		if !endDate.After(startDate) {
 			endDate = startDate.AddDate(0, 0, 1)
 		}
-		if _, err := fmt.Fprintf(w, "[%s(%d) %s] starts %s and ends %s\n", row.AtomicProcess, row.NumOfReworks, sb.String(), startDate.Format(plantUMLDateFormat), endDate.Format(plantUMLDateFormat)); err != nil {
+		taskName := fmt.Sprintf("%s(%d) %s", row.AtomicProcess, row.NumOfReworks, sb.String())
+		if _, err := fmt.Fprintf(w, "[%s] starts %s and ends %s\n", taskName, startDate.Format(plantUMLDateFormat), endDate.Format(plantUMLDateFormat)); err != nil {
 			return fmt.Errorf("fsmreporter.TimelineTableToPlantUMLGantt: %w", err)
+		}
+		if em.Contains(string(row.AtomicProcess)) {
+			if _, err := fmt.Fprintf(w, "[%s] is colored in %s\n", taskName, emphasis.PlantUMLColor); err != nil {
+				return fmt.Errorf("fsmreporter.TimelineTableToPlantUMLGantt: %w", err)
+			}
 		}
 	}
 

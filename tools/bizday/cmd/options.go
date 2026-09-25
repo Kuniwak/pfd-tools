@@ -20,9 +20,7 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("bizday", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: bizday [-start <start-day>] [-start-time <start-time>] [-duration <duration>] [-weekdays <weekdays>] [-not-biz-days <not-biz-days>] -time <time>")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: bizday [-start <start-day>] [-start-time <start-time>] [-duration <duration>] [-weekdays <weekdays>] [-not-biz-days <not-biz-days>] -time <time>", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
   $ bizday -time '2016-01-02 15:00'
@@ -54,6 +52,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}

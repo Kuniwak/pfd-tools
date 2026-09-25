@@ -7,25 +7,25 @@
                 <mxCell id="4" value="" style="edgeStyle=none;html=1;" parent="1" source="2" target="3" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="2" value="D4: Specification" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="2" value="D4: 仕様" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="40" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="6" value="" style="edgeStyle=none;html=1;" parent="1" source="3" target="5" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="3" value="P1: Implement" style="ellipse;whiteSpace=wrap;html=1;strokeColor=default;strokeWidth=2;" parent="1" vertex="1">
+                <mxCell id="3" value="P1: 実装する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=default;strokeWidth=2;" parent="1" vertex="1">
                     <mxGeometry x="200" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="9" value="" style="edgeStyle=none;html=1;" parent="1" source="5" target="8" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="5" value="D1: Implementation" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="5" value="D1: 実装" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="360" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="11" value="" style="edgeStyle=none;html=1;" parent="1" source="8" target="10" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="8" value="P2: Review" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="8" value="P2: レビューする" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="520" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="12" style="edgeStyle=orthogonalEdgeStyle;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" parent="1" source="10" target="3" edge="1">
@@ -36,13 +36,13 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="10" value="D2: Review&lt;br&gt;comments" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="10" value="D2: レビュー&lt;br&gt;コメント" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="680" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="17" value="" style="edgeStyle=none;html=1;" parent="1" source="13" target="16" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="13" value="P3: Verify" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="13" value="P3: 検証する" style="ellipse;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="520" y="480" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="14" style="edgeStyle=orthogonalEdgeStyle;html=1;" parent="1" source="5" target="13" edge="1">
@@ -68,11 +68,11 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="16" value="D3: Verification result" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="16" value="D3: 検証結果" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="680" y="480" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="20" value="Comment" parent="0"/>
-                <mxCell id="21" value="Comments" style="rounded=0;whiteSpace=wrap;html=1;" parent="20" vertex="1">
+                <mxCell id="21" value="コメント" style="rounded=0;whiteSpace=wrap;html=1;" parent="20" vertex="1">
                     <mxGeometry x="40" y="190" width="120" height="80" as="geometry"/>
                 </mxCell>
             </root>
@@ -86,16 +86,16 @@
                 <mxCell id="h_2N5Sa6hUkllRCv-iia-3" value="" style="edgeStyle=none;html=1;" parent="1" source="hO8RJ9AdBYUCDEpOiIOb-1" target="h_2N5Sa6hUkllRCv-iia-1" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="hO8RJ9AdBYUCDEpOiIOb-1" value="D4: Specification" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="hO8RJ9AdBYUCDEpOiIOb-1" value="D4: 仕様" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="40" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="hO8RJ9AdBYUCDEpOiIOb-2" value="D1: Implementation" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                <mxCell id="hO8RJ9AdBYUCDEpOiIOb-2" value="D1: 実装" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="360" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="h_2N5Sa6hUkllRCv-iia-2" value="" style="edgeStyle=none;html=1;" parent="1" source="h_2N5Sa6hUkllRCv-iia-1" target="hO8RJ9AdBYUCDEpOiIOb-2" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="h_2N5Sa6hUkllRCv-iia-1" value="P4: Implement" style="ellipse;whiteSpace=wrap;html=1;strokeColor=default;strokeWidth=1;" parent="1" vertex="1">
+                <mxCell id="h_2N5Sa6hUkllRCv-iia-1" value="P4: 実装する" style="ellipse;whiteSpace=wrap;html=1;strokeColor=default;strokeWidth=1;" parent="1" vertex="1">
                     <mxGeometry x="200" y="360" width="120" height="80" as="geometry"/>
                 </mxCell>
             </root>

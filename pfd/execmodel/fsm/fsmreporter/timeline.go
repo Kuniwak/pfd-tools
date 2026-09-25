@@ -43,17 +43,13 @@ func (a TimelineTableRow) Compare(b TimelineTableRow) int {
 	return cmp.Compare(a.NumOfComplete, b.NumOfComplete)
 }
 
-// BuildTimelineTable segments the Plan and generates a TimelineTable.
 func BuildTimelineTable(plan *fsm.Plan, logger *slog.Logger) TimelineTable {
 	tt := make(TimelineTable, 0, plan.Len())
 	if plan.Len() == 0 {
 		return tt
 	}
 
-	aps := sets.New(pfd.AtomicProcessID.Compare)
-	for ap := range plan.InitialState.NumOfCompleteMap {
-		aps.Add(pfd.AtomicProcessID.Compare, ap)
-	}
+	aps := plan.AtomicProcessIDs()
 
 	states := plan.States()
 
@@ -68,9 +64,7 @@ func BuildTimelineTable(plan *fsm.Plan, logger *slog.Logger) TimelineTable {
 		}
 
 		for i := 0; i < len(states)-1; i++ {
-			// NOTE: prevState --(allocation)--> nextState
-			//               |                           |
-			//              time                       time
+
 			nextState := states[i+1]
 			prevState := states[i]
 			allocation := plan.Transitions[i].Allocation
@@ -79,14 +73,8 @@ func BuildTimelineTable(plan *fsm.Plan, logger *slog.Logger) TimelineTable {
 				panic(fmt.Sprintf("fsmreporter.BuildTimelineTable: missing num of complete: %q", ap))
 			}
 
-			// NOTE: Find the nearest future time among the following:
-			// 1. Allocation time
-			// 2. Time immediately after completion count changes
-			// 3. Time after the last time
-
-			// NOTE: Case 1
 			if elem, ok := allocation[ap]; ok {
-				// NOTE: Find the time immediately after the completion count changes
+
 				startTime := prevState.Time
 				var endTime execmodel.Time
 				found := false
@@ -118,13 +106,11 @@ func BuildTimelineTable(plan *fsm.Plan, logger *slog.Logger) TimelineTable {
 				continue
 			}
 
-			// NOTE: Case 2
 			if nextState.NumOfCompleteMap[ap] != initNumOfComplete {
 				logger.Warn("fsmreporter.BuildTimelineTable: IDAP found", "atomic_process", ap, "prev_num_of_complete", initNumOfComplete)
 				continue
 			}
 
-			// NOTE: Case 3: Exit without adding to timeline
 		}
 	}
 

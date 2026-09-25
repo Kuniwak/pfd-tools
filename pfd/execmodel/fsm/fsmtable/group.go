@@ -9,11 +9,9 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// NewGroupTableByAtomicProcessTable derives a GroupTable from the group column of an
-// AtomicProcessTable. Returns an empty table when the group column is absent.
 func NewGroupTableByAtomicProcessTable(ap *pfd.AtomicProcessTable) *GroupTable {
 	empty := &GroupTable{ExtraHeaders: []string{}, Rows: []*GroupTableRow{}}
-	groupIdx := DefaultGroupColumnMatchFunc(ap.ExtraHeaders)
+	groupIdx := DefaultRowColumnMatchFunc(ap.ExtraHeaders)
 	if groupIdx < 0 {
 		return empty
 	}

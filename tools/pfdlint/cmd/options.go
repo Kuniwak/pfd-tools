@@ -9,6 +9,7 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/allcheckers"
 	"github.com/Kuniwak/pfd-tools/cli"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/tools"
 )
 
@@ -33,7 +34,6 @@ type Options struct {
 	HasCompositeProcessTable    bool
 	CompositeProcessTableReader io.Reader
 
-	HasCompositeDeliverableTable    bool
 	CompositeDeliverableTableReader io.Reader
 
 	HasResourceTable    bool
@@ -45,6 +45,8 @@ type Options struct {
 	HasGroupTable    bool
 	GroupTableReader io.Reader
 
+	Model execmodel.Model
+
 	Reporter allcheckers.Func
 }
 
@@ -52,18 +54,16 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("lint", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfdlint [options] [-f <config>] [-p <pfd>] [-cd <composite-deliverable-table>] [-a <atomic-process-table>] [-ad <atomic-deliverable-table>] [-cp <composite-process-table>] [-r <resource-table>] [-m <milestone-table>] [-g <group-table>]")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfdlint [options] [-f <config>] [-p <pfd>] [-cd <composite-deliverable-table>] [-ap <atomic-process-table>] [-ad <atomic-deliverable-table>] [-cp <composite-process-table>] [-r <resource-table>] [-m <milestone-table>] [-g <group-table>]", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
   $ pfdlint -f ./path/to/project.json
-  WARNING no-desc Please add a concise description.       [D2]
-  ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D3]
+  WARNING no-desc 端的な説明を追加してください。  [D2]
+  ERROR   single-src      成果物が複数のプロセスから出力されています。成果物はただ1つのプロセスから出力されるべきです。   [D3]
 
   $ pfdlint -p ./path/to/pfd.drawio -ap ./path/to/ap.tsv -ad ./path/to/ad.tsv -cd ./path/to/cd.tsv -cp ./path/to/cp.tsv -r ./path/to/r.tsv -m ./path/to/m.tsv -g ./path/to/g.tsv
-  WARNING no-desc Please add a concise description.       [D2]
-  ERROR   single-src      A deliverable should be output from only one process. This includes output through feedback edges.      [D3]
+  WARNING no-desc 端的な説明を追加してください。  [D2]
+  ERROR   single-src      成果物が複数のプロセスから出力されています。成果物はただ1つのプロセスから出力されるべきです。   [D3]
 
   $ pfdlint -locale en -f ./path/to/project.json
   WARNING no-desc Please add a concise description.       [D3]
@@ -75,7 +75,7 @@ Example
 	var commonRawOptions tools.CommonRawOptions
 	tools.DeclareCommonOptions(flags, &commonRawOptions)
 
-	formatFlag := flags.String("format", "tsv", "format of the fsmreporter")
+	formatFlag := flags.String(tools.OutFormatFlag, "tsv", "format of the fsmreporter")
 
 	var fsmRawOptions tools.FSMRawOptions
 	var configShortPath, configLongPath string
@@ -93,6 +93,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -110,6 +113,10 @@ Example
 	fsmOptions, err := tools.ValidatePossibleFSMOptions(&mergedOptions, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
+	if fsmOptions.PFDReader == nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: no PFD input: specify -p <pfd> or -f <config>")
 	}
 
 	var rep allcheckers.Func
@@ -130,7 +137,6 @@ Example
 		AtomicDeliverableTableReader:    fsmOptions.AtomicDeliverableTableReader,
 		HasCompositeProcessTable:        fsmOptions.CompositeProcessTableReader != nil,
 		CompositeProcessTableReader:     fsmOptions.CompositeProcessTableReader,
-		HasCompositeDeliverableTable:    fsmOptions.CompositeDeliverableTableReader != nil,
 		CompositeDeliverableTableReader: fsmOptions.CompositeDeliverableTableReader,
 		HasResourceTable:                fsmOptions.ResourceTableReader != nil,
 		ResourceTableReader:             fsmOptions.ResourceTableReader,
@@ -139,6 +145,7 @@ Example
 		HasGroupTable:                   fsmOptions.GroupTableReader != nil,
 		GroupTableReader:                fsmOptions.GroupTableReader,
 		CommonOptions:                   commonOptions,
+		Model:                           fsmOptions.Model,
 		Reporter:                        rep,
 	}, nil
 }

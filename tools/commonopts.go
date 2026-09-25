@@ -14,7 +14,9 @@ import (
 
 	"github.com/Kuniwak/pfd-tools/bizday"
 	"github.com/Kuniwak/pfd-tools/cli"
+	"github.com/Kuniwak/pfd-tools/emphasis"
 	"github.com/Kuniwak/pfd-tools/locale"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmreporter"
 	"github.com/Kuniwak/pfd-tools/sets"
@@ -40,18 +42,26 @@ var (
 	GroupTableLongFlag                 = "group"
 	ConfigShortFlag                    = "f"
 	ConfigLongFlag                     = "config"
+	ResourceModeFlag                   = "res"
+	FeedbackModeFlag                   = "fb"
+	OutFormatFlag                      = "out-format"
+	EmphasisTSVFlag                    = "em-tsv"
+	OutDirFlag                         = "out-dir"
+	InFormatFlag                       = "in-format"
 )
 
 type CommonOptions struct {
-	Help     bool          `json:"help"`
-	Version  bool          `json:"version"`
-	LogLevel slog.Level    `json:"log_level"`
-	Logger   *slog.Logger  `json:"logger"`
-	Locale   locale.Locale `json:"locale"`
+	Help      bool          `json:"help"`
+	ShortHelp bool          `json:"short_help"`
+	Version   bool          `json:"version"`
+	LogLevel  slog.Level    `json:"log_level"`
+	Logger    *slog.Logger  `json:"logger"`
+	Locale    locale.Locale `json:"locale"`
 }
 
 type CommonRawOptions struct {
 	Help         bool
+	ShortHelp    bool
 	ShortVersion bool
 	Version      bool
 	Silent       bool
@@ -65,9 +75,31 @@ func DeclareCommonOptions(flags *flag.FlagSet, options *CommonRawOptions) {
 	flags.BoolVar(&options.Silent, "silent", false, "silent mode")
 	flags.BoolVar(&options.Debug, "debug", false, "debug mode")
 	flags.StringVar(&options.Locale, "locale", "ja", "locale of the fsmreporter")
+	flags.BoolVar(&options.ShortHelp, "short-help", false, "ツールの短い説明を表示して終了する")
+}
+
+func ParsePageList(s string) []string {
+	var pages []string
+	for _, part := range strings.Split(s, ",") {
+		if name := strings.TrimSpace(part); name != "" {
+			pages = append(pages, name)
+		}
+	}
+	return pages
+}
+
+func PrintUsageHeader(flags *flag.FlagSet, usageLine, shortHelp string) {
+	w := flags.Output()
+	fmt.Fprintln(w, usageLine)
+	fmt.Fprintln(w, "\n"+shortHelp)
+	fmt.Fprintln(w, "\nOptions")
+	flags.PrintDefaults()
 }
 
 func ValidateCommonOptions(options *CommonRawOptions) (*CommonOptions, error) {
+	if options.ShortHelp {
+		return &CommonOptions{ShortHelp: true}, nil
+	}
 	if options.ShortVersion || options.Version {
 		return &CommonOptions{Version: true}, nil
 	}
@@ -112,18 +144,20 @@ func DeclarePFDOptionsWithFlagNames(shortName string, longName string, flags *fl
 	flags.StringVar(pfdLongFlag, longName, "", fmt.Sprintf("path to the PFD (same as -%s)", shortName))
 }
 
+func ResolvePath(basePath, path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(basePath, path)
+}
+
 func ValidatePFDOptions(pfdShortPath *string, pfdLongPath *string, basePath string) (io.Reader, string, error) {
 	pfdRelPath := *pfdLongPath
 	if *pfdShortPath != "" {
 		pfdRelPath = *pfdShortPath
 	}
 
-	var pfdPath string
-	if filepath.IsAbs(pfdRelPath) {
-		pfdPath = pfdRelPath
-	} else {
-		pfdPath = filepath.Join(basePath, pfdRelPath)
-	}
+	pfdPath := ResolvePath(basePath, pfdRelPath)
 
 	r, err := os.OpenFile(pfdPath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -133,35 +167,99 @@ func ValidatePFDOptions(pfdShortPath *string, pfdLongPath *string, basePath stri
 }
 
 type FSMOptions struct {
-	PFDReader                            io.Reader `json:"-"`
-	AtomicProcessTableReader             io.Reader `json:"-"`
-	AtomicDeliverableTableReader         io.Reader `json:"-"`
-	CompositeProcessTableReader          io.Reader `json:"-"`
-	CompositeDeliverableTableReader      io.Reader `json:"-"`
-	ResourceTableReader                  io.Reader `json:"-"`
-	MilestoneTableReader                 io.Reader `json:"-"`
-	GroupTableReader                     io.Reader `json:"-"`
-	MaximalAvailableAllocationsThreshold int       `json:"maximal_available_allocations_threshold"`
+	PFDReader                            io.Reader       `json:"-"`
+	AtomicProcessTableReader             io.Reader       `json:"-"`
+	AtomicDeliverableTableReader         io.Reader       `json:"-"`
+	CompositeProcessTableReader          io.Reader       `json:"-"`
+	CompositeDeliverableTableReader      io.Reader       `json:"-"`
+	ResourceTableReader                  io.Reader       `json:"-"`
+	MilestoneTableReader                 io.Reader       `json:"-"`
+	GroupTableReader                     io.Reader       `json:"-"`
+	MaximalAvailableAllocationsThreshold int             `json:"maximal_available_allocations_threshold"`
+	Model                                execmodel.Model `json:"-"`
 }
 
 type FSMRawOptions struct {
-	PFDPath                              string `json:"pfd"`
+	PFDPath                              string `json:"pfd,omitempty"`
 	ShortPFDPath                         string `json:"-"`
-	AtomicProcessTablePath               string `json:"atomic_process_table"`
+	AtomicProcessTablePath               string `json:"atomic_process_table,omitempty"`
 	ShortAtomicProcessTablePath          string `json:"-"`
-	AtomicDeliverableTablePath           string `json:"atomic_deliverable_table"`
+	AtomicDeliverableTablePath           string `json:"atomic_deliverable_table,omitempty"`
 	ShortAtomicDeliverableTablePath      string `json:"-"`
-	CompositeProcessTablePath            string `json:"composite_process_table"`
+	CompositeProcessTablePath            string `json:"composite_process_table,omitempty"`
 	ShortCompositeProcessTablePath       string `json:"-"`
-	CompositeDeliverableTablePath        string `json:"composite_deliverable_table"`
+	CompositeDeliverableTablePath        string `json:"composite_deliverable_table,omitempty"`
 	ShortCompositeDeliverableTablePath   string `json:"-"`
-	ResourceTablePath                    string `json:"resource_table"`
+	ResourceTablePath                    string `json:"resource_table,omitempty"`
 	ShortResourceTablePath               string `json:"-"`
-	MilestoneTablePath                   string `json:"milestone_table"`
+	MilestoneTablePath                   string `json:"milestone_table,omitempty"`
 	ShortMilestoneTablePath              string `json:"-"`
-	GroupTablePath                       string `json:"group_table"`
+	GroupTablePath                       string `json:"group_table,omitempty"`
 	ShortGroupTablePath                  string `json:"-"`
-	MaximalAvailableAllocationsThreshold int    `json:"maximal_available_allocations_threshold"`
+	MaximalAvailableAllocationsThreshold int    `json:"maximal_available_allocations_threshold,omitempty"`
+	ResourceMode                         string `json:"resource_mode,omitempty"`
+	FeedbackMode                         string `json:"feedback_mode,omitempty"`
+}
+
+func ResolveModel(options FSMRawOptions, resourceModeFlag string, feedbackModeFlag string) (execmodel.Model, error) {
+	resourceMode, feedbackMode := options.ResourceMode, options.FeedbackMode
+	cli.OverrideIfSet(&resourceMode, resourceModeFlag)
+	cli.OverrideIfSet(&feedbackMode, feedbackModeFlag)
+	model, err := execmodel.ParseModel(resourceMode, feedbackMode)
+	if err != nil {
+		return execmodel.Model{}, fmt.Errorf("tools.ResolveModel: %w", err)
+	}
+	return model, nil
+}
+
+type ProjectLayout struct {
+	PFDPath                   string
+	AtomicProcessTable        string
+	AtomicDeliverableTable    string
+	CompositeDeliverableTable string
+	ResourceTable             string
+	MilestoneTable            string
+	GroupTable                string
+}
+
+func DefaultProjectLayout(pfdPath string) ProjectLayout {
+	return ProjectLayout{
+		PFDPath:                   pfdPath,
+		AtomicProcessTable:        "ap.tsv",
+		AtomicDeliverableTable:    "ad.tsv",
+		CompositeDeliverableTable: "cd.tsv",
+		ResourceTable:             "r.tsv",
+		MilestoneTable:            "m.tsv",
+		GroupTable:                "g.tsv",
+	}
+}
+
+func (l ProjectLayout) FSMRawOptions(model execmodel.Model) FSMRawOptions {
+	options := FSMRawOptions{
+		PFDPath:                       l.PFDPath,
+		AtomicProcessTablePath:        l.AtomicProcessTable,
+		AtomicDeliverableTablePath:    l.AtomicDeliverableTable,
+		CompositeDeliverableTablePath: l.CompositeDeliverableTable,
+		MilestoneTablePath:            l.MilestoneTable,
+		GroupTablePath:                l.GroupTable,
+		ResourceMode:                  model.Resource.String(),
+		FeedbackMode:                  model.Feedback.String(),
+	}
+	if model.Resource == execmodel.ResourceModeFinite {
+		options.ResourceTablePath = l.ResourceTable
+	}
+	return options
+}
+
+func WriteProjectJSON(w io.Writer, options FSMRawOptions) error {
+	bs, err := json.MarshalIndent(options, "", "\t")
+	if err != nil {
+		return fmt.Errorf("tools.WriteProjectJSON: %w", err)
+	}
+	if _, err := w.Write(append(bs, '\n')); err != nil {
+		return fmt.Errorf("tools.WriteProjectJSON: %w", err)
+	}
+	return nil
 }
 
 func DeclareAtomicProcessTableOptions(flags *flag.FlagSet, shortPath *string, path *string) {
@@ -175,7 +273,7 @@ func ValidateAtomicProcessTableOptions(shortPath *string, path *string, basePath
 		atomicProcessTableRelPath = *shortPath
 	}
 
-	atomicProcessTablePath := filepath.Join(basePath, atomicProcessTableRelPath)
+	atomicProcessTablePath := ResolvePath(basePath, atomicProcessTableRelPath)
 
 	r, err := os.OpenFile(atomicProcessTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -195,7 +293,7 @@ func ValidateAtomicDeliverableTableOptions(shortPath *string, path *string, base
 		atomicDeliverableTableRelPath = *shortPath
 	}
 
-	atomicDeliverableTablePath := filepath.Join(basePath, atomicDeliverableTableRelPath)
+	atomicDeliverableTablePath := ResolvePath(basePath, atomicDeliverableTableRelPath)
 
 	r, err := os.OpenFile(atomicDeliverableTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -215,7 +313,7 @@ func ValidateResourceTableOptions(shortPath *string, path *string, basePath stri
 		resourceTableRelPath = *shortPath
 	}
 
-	resourceTablePath := filepath.Join(basePath, resourceTableRelPath)
+	resourceTablePath := ResolvePath(basePath, resourceTableRelPath)
 
 	r, err := os.OpenFile(resourceTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -235,7 +333,7 @@ func ValidateCompositeProcessTableOptions(shortPath *string, path *string, baseP
 		compositeProcessTableRelPath = *shortPath
 	}
 
-	compositeProcessTablePath := filepath.Join(basePath, compositeProcessTableRelPath)
+	compositeProcessTablePath := ResolvePath(basePath, compositeProcessTableRelPath)
 
 	r, err := os.OpenFile(compositeProcessTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -259,7 +357,7 @@ func ValidateCompositeDeliverableTableOptions(shortPath *string, path *string, b
 		compositeDeliverableTableRelPath = *shortPath
 	}
 
-	compositeDeliverableTablePath := filepath.Join(basePath, compositeDeliverableTableRelPath)
+	compositeDeliverableTablePath := ResolvePath(basePath, compositeDeliverableTableRelPath)
 
 	r, err := os.OpenFile(compositeDeliverableTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -279,7 +377,7 @@ func ValidateMilestoneTableOptions(shortPath *string, path *string, basePath str
 		milestoneTableRelPath = *shortPath
 	}
 
-	milestoneTablePath := filepath.Join(basePath, milestoneTableRelPath)
+	milestoneTablePath := ResolvePath(basePath, milestoneTableRelPath)
 
 	r, err := os.OpenFile(milestoneTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -298,7 +396,7 @@ func ValidateGroupTableOptions(shortPath *string, path *string, basePath string)
 	if *shortPath != "" {
 		groupTableRelPath = *shortPath
 	}
-	groupTablePath := filepath.Join(basePath, groupTableRelPath)
+	groupTablePath := ResolvePath(basePath, groupTableRelPath)
 
 	r, err := os.OpenFile(groupTablePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -312,7 +410,13 @@ func DeclareConfigOptions(flags *flag.FlagSet, shortPath *string, path *string) 
 	flags.StringVar(path, ConfigLongFlag, "", "path to the run config file")
 }
 
+func DeclareExecModelOptions(flags *flag.FlagSet, resourceMode *string, feedbackMode *string) {
+	flags.StringVar(resourceMode, ResourceModeFlag, "", fmt.Sprintf("how the exec model handles resources (available: %s, %s; default: %s)", execmodel.ResourceModeFinite, execmodel.ResourceModeInfinite, execmodel.DefaultModel().Resource))
+	flags.StringVar(feedbackMode, FeedbackModeFlag, "", fmt.Sprintf("how the exec model handles feedback edges (available: %s, %s; default: %s)", execmodel.FeedbackModeEnabled, execmodel.FeedbackModeDisabled, execmodel.DefaultModel().Feedback))
+}
+
 func DeclareFSMOptions(flags *flag.FlagSet, options *FSMRawOptions, configLongPath *string, configShortPath *string) {
+	DeclareExecModelOptions(flags, &options.ResourceMode, &options.FeedbackMode)
 	flags.StringVar(&options.ShortPFDPath, PFDShortFlag, "", "path to the PFD")
 	flags.StringVar(&options.PFDPath, PFDLongFlag, "", "path to the PFD")
 	flags.IntVar(&options.MaximalAvailableAllocationsThreshold, "maximal-available-allocations-threshold", 10, "use only maximal available allocations if number of newly allocatable atomic processes is greater than the threshold. do not use maximal available allocations if threshold is not positive")
@@ -326,52 +430,223 @@ func DeclareFSMOptions(flags *flag.FlagSet, options *FSMRawOptions, configLongPa
 	DeclareConfigOptions(flags, configShortPath, configLongPath)
 }
 
-// ReadFSMRawOptions reads FSMRawOptions from config JSON (if specified) with CLI flag overrides.
-// If no config is specified, returns cliOptions as-is with cwd as basePath.
-// If config is specified, reads JSON as base values and applies CLI flag overrides on top.
-func ReadFSMRawOptions(configShortPath *string, configLongPath *string, cliOptions FSMRawOptions, cwd string) (FSMRawOptions, string, error) {
-	if *configShortPath == "" && *configLongPath == "" {
-		return cliOptions, cwd, nil
+func (options FSMRawOptions) Absolutize(basePath string) FSMRawOptions {
+	for _, path := range []*string{
+		&options.PFDPath, &options.ShortPFDPath,
+		&options.AtomicProcessTablePath, &options.ShortAtomicProcessTablePath,
+		&options.AtomicDeliverableTablePath, &options.ShortAtomicDeliverableTablePath,
+		&options.CompositeProcessTablePath, &options.ShortCompositeProcessTablePath,
+		&options.CompositeDeliverableTablePath, &options.ShortCompositeDeliverableTablePath,
+		&options.ResourceTablePath, &options.ShortResourceTablePath,
+		&options.MilestoneTablePath, &options.ShortMilestoneTablePath,
+		&options.GroupTablePath, &options.ShortGroupTablePath,
+	} {
+		if *path == "" {
+			continue
+		}
+		*path = ResolvePath(basePath, *path)
 	}
+	return options
+}
 
-	configPath := *configLongPath
+type ProjectConfig struct {
+	FSMRawOptions
+	PlanOutputFormatRawOptions
+
+	PlanPath string `json:"plan,omitempty"`
+
+	ExplicitBusinessTimeFlags []string `json:"-"`
+
+	ExplicitEmphasisTSVFlag bool `json:"-"`
+}
+
+var businessTimeSettingNames = []struct {
+	Flag string
+	Key  string
+}{
+	{"start", "start_day"},
+	{"start-time", "start_time"},
+	{"duration", "duration"},
+	{"weekdays", "weekdays"},
+	{"not-biz-days", "not_biz_days"},
+}
+
+func configPath(configShortPath *string, configLongPath *string) string {
 	if *configShortPath != "" {
-		configPath = *configShortPath
+		return *configShortPath
+	}
+	return *configLongPath
+}
+
+func NoFlags() *flag.FlagSet {
+	return flag.NewFlagSet("", flag.ContinueOnError)
+}
+
+func explicitFlagNames(flags *flag.FlagSet) map[string]struct{} {
+	res := make(map[string]struct{})
+	flags.Visit(func(f *flag.Flag) {
+		res[f.Name] = struct{}{}
+	})
+	return res
+}
+
+func ReadProjectConfig(
+	configShortPath *string,
+	configLongPath *string,
+	cliFSMOptions FSMRawOptions,
+	cliPlanOutputOptions PlanOutputFormatRawOptions,
+	cwd string,
+	flags *flag.FlagSet,
+) (ProjectConfig, string, error) {
+	explicit := explicitFlagNames(flags)
+
+	path := configPath(configShortPath, configLongPath)
+	if path == "" {
+		return ProjectConfig{
+			FSMRawOptions:              cliFSMOptions,
+			PlanOutputFormatRawOptions: cliPlanOutputOptions,
+			ExplicitBusinessTimeFlags:  explicitBusinessTimeFlags(explicit),
+			ExplicitEmphasisTSVFlag:    isExplicitFlag(explicit, EmphasisTSVFlag),
+		}, cwd, nil
 	}
 
-	basePath := filepath.Dir(configPath)
+	basePath := filepath.Dir(path)
 
-	r, err := os.Open(configPath)
+	r, err := os.Open(path)
 	if err != nil {
-		return FSMRawOptions{}, "", fmt.Errorf("tools.ReadFSMRawOptions: %w", err)
+		return ProjectConfig{}, "", fmt.Errorf("tools.ReadProjectConfig: %w", err)
 	}
 	defer r.Close()
 
-	var result FSMRawOptions
+	var result ProjectConfig
 	if err := json.NewDecoder(r).Decode(&result); err != nil {
-		return FSMRawOptions{}, "", fmt.Errorf("tools.ReadFSMRawOptions: %w", err)
+		return ProjectConfig{}, "", fmt.Errorf("tools.ReadProjectConfig: %w", err)
 	}
 
-	// CLI flags override JSON values (short flag > long flag > JSON value)
-	cli.OverrideIfSet(&result.PFDPath, cliOptions.ShortPFDPath, cliOptions.PFDPath)
-	cli.OverrideIfSet(&result.AtomicProcessTablePath, cliOptions.ShortAtomicProcessTablePath, cliOptions.AtomicProcessTablePath)
-	cli.OverrideIfSet(&result.AtomicDeliverableTablePath, cliOptions.ShortAtomicDeliverableTablePath, cliOptions.AtomicDeliverableTablePath)
-	cli.OverrideIfSet(&result.CompositeProcessTablePath, cliOptions.ShortCompositeProcessTablePath, cliOptions.CompositeProcessTablePath)
-	cli.OverrideIfSet(&result.CompositeDeliverableTablePath, cliOptions.ShortCompositeDeliverableTablePath, cliOptions.CompositeDeliverableTablePath)
-	cli.OverrideIfSet(&result.ResourceTablePath, cliOptions.ShortResourceTablePath, cliOptions.ResourceTablePath)
-	cli.OverrideIfSet(&result.MilestoneTablePath, cliOptions.ShortMilestoneTablePath, cliOptions.MilestoneTablePath)
-	cli.OverrideIfSet(&result.GroupTablePath, cliOptions.ShortGroupTablePath, cliOptions.GroupTablePath)
+	cliFSMOptions = cliFSMOptions.Absolutize(cwd)
 
-	if cliOptions.MaximalAvailableAllocationsThreshold != 0 {
-		result.MaximalAvailableAllocationsThreshold = cliOptions.MaximalAvailableAllocationsThreshold
+	cli.OverrideIfSet(&result.PFDPath, cliFSMOptions.ShortPFDPath, cliFSMOptions.PFDPath)
+	cli.OverrideIfSet(&result.AtomicProcessTablePath, cliFSMOptions.ShortAtomicProcessTablePath, cliFSMOptions.AtomicProcessTablePath)
+	cli.OverrideIfSet(&result.AtomicDeliverableTablePath, cliFSMOptions.ShortAtomicDeliverableTablePath, cliFSMOptions.AtomicDeliverableTablePath)
+	cli.OverrideIfSet(&result.CompositeProcessTablePath, cliFSMOptions.ShortCompositeProcessTablePath, cliFSMOptions.CompositeProcessTablePath)
+	cli.OverrideIfSet(&result.CompositeDeliverableTablePath, cliFSMOptions.ShortCompositeDeliverableTablePath, cliFSMOptions.CompositeDeliverableTablePath)
+	cli.OverrideIfSet(&result.ResourceTablePath, cliFSMOptions.ShortResourceTablePath, cliFSMOptions.ResourceTablePath)
+	cli.OverrideIfSet(&result.MilestoneTablePath, cliFSMOptions.ShortMilestoneTablePath, cliFSMOptions.MilestoneTablePath)
+	cli.OverrideIfSet(&result.GroupTablePath, cliFSMOptions.ShortGroupTablePath, cliFSMOptions.GroupTablePath)
+	cli.OverrideIfSet(&result.ResourceMode, cliFSMOptions.ResourceMode)
+	cli.OverrideIfSet(&result.FeedbackMode, cliFSMOptions.FeedbackMode)
+
+	if cliFSMOptions.MaximalAvailableAllocationsThreshold != 0 {
+		result.MaximalAvailableAllocationsThreshold = cliFSMOptions.MaximalAvailableAllocationsThreshold
 	}
+
+	result.ExplicitBusinessTimeFlags = explicitBusinessTimeFlags(explicit)
+	result.ExplicitEmphasisTSVFlag = isExplicitFlag(explicit, EmphasisTSVFlag)
+
+	if result.AdditionalNotBusinessDays != "" {
+		result.AdditionalNotBusinessDays = ResolvePath(basePath, result.AdditionalNotBusinessDays)
+	}
+	if cliPlanOutputOptions.AdditionalNotBusinessDays != "" {
+		cliPlanOutputOptions.AdditionalNotBusinessDays = ResolvePath(cwd, cliPlanOutputOptions.AdditionalNotBusinessDays)
+	}
+	if result.PlanPath != "" {
+		result.PlanPath = ResolvePath(basePath, result.PlanPath)
+	}
+	if result.EmphasisTSVPath != "" {
+		result.EmphasisTSVPath = ResolvePath(basePath, result.EmphasisTSVPath)
+	}
+	if cliPlanOutputOptions.EmphasisTSVPath != "" {
+		cliPlanOutputOptions.EmphasisTSVPath = ResolvePath(cwd, cliPlanOutputOptions.EmphasisTSVPath)
+	}
+
+	result.PlanOutputFormatRawOptions = mergePlanOutputFormatRawOptions(result.PlanOutputFormatRawOptions, cliPlanOutputOptions, explicit)
 
 	return result, basePath, nil
 }
 
-// ValidateAllFSMOptions validates FSMRawOptions requiring pfd, ap, r, ad, cd.
-// Optional fields (m, g) are opened only when their paths are non-empty.
+func isExplicitFlag(explicitFlags map[string]struct{}, flagName string) bool {
+	_, ok := explicitFlags[flagName]
+	return ok
+}
+
+func explicitBusinessTimeFlags(explicitFlags map[string]struct{}) []string {
+	var res []string
+	for _, name := range businessTimeSettingNames {
+		if _, ok := explicitFlags[name.Flag]; ok {
+			res = append(res, "-"+name.Flag)
+		}
+	}
+	return res
+}
+
+func mergePlanOutputFormatRawOptions(fileOptions PlanOutputFormatRawOptions, cliOptions PlanOutputFormatRawOptions, explicitFlags map[string]struct{}) PlanOutputFormatRawOptions {
+	res := cliOptions
+
+	isExplicit := func(flagName string) bool {
+		return isExplicitFlag(explicitFlags, flagName)
+	}
+
+	if !isExplicit(OutFormatFlag) && fileOptions.OutputFormat != "" {
+		res.OutputFormat = fileOptions.OutputFormat
+	}
+	if !isExplicit(EmphasisTSVFlag) && fileOptions.EmphasisTSVPath != "" {
+		res.EmphasisTSVPath = fileOptions.EmphasisTSVPath
+	}
+	if !isExplicit("start") && fileOptions.StartDay != "" {
+		res.StartDay = fileOptions.StartDay
+	}
+	if !isExplicit("start-time") && fileOptions.StartTime != "" {
+		res.StartTime = fileOptions.StartTime
+	}
+	if !isExplicit("duration") && fileOptions.Duration != 0 {
+		res.Duration = fileOptions.Duration
+	}
+	if !isExplicit("weekdays") && fileOptions.Weekdays != "" {
+		res.Weekdays = fileOptions.Weekdays
+	}
+	if !isExplicit("not-biz-days") && fileOptions.AdditionalNotBusinessDays != "" {
+		res.AdditionalNotBusinessDays = fileOptions.AdditionalNotBusinessDays
+	}
+
+	return res
+}
+
+func ReadFSMRawOptions(configShortPath *string, configLongPath *string, cliOptions FSMRawOptions, cwd string) (FSMRawOptions, string, error) {
+	config, basePath, err := ReadProjectConfig(configShortPath, configLongPath, cliOptions, PlanOutputFormatRawOptions{}, cwd, NoFlags())
+	if err != nil {
+		return FSMRawOptions{}, "", fmt.Errorf("tools.ReadFSMRawOptions: %w", err)
+	}
+	return config.FSMRawOptions, basePath, nil
+}
+
+func RequireTablePath(flagName string, path string, shortPath string) error {
+	if path == "" && shortPath == "" {
+		return fmt.Errorf("-%s is required", flagName)
+	}
+	return nil
+}
+
 func ValidateAllFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions, error) {
+
+	model, err := ResolveModel(*options, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+	}
+
+	for _, required := range []struct {
+		Flag      string
+		Path      string
+		ShortPath string
+	}{
+		{PFDShortFlag, options.PFDPath, options.ShortPFDPath},
+		{AtomicProcessTableShortFlag, options.AtomicProcessTablePath, options.ShortAtomicProcessTablePath},
+		{AtomicDeliverableTableShortFlag, options.AtomicDeliverableTablePath, options.ShortAtomicDeliverableTablePath},
+	} {
+		if err := RequireTablePath(required.Flag, required.Path, required.ShortPath); err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
+	}
+
 	pfdReader, _, err := ValidatePFDOptions(&options.ShortPFDPath, &options.PFDPath, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
@@ -380,17 +655,29 @@ func ValidateAllFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions
 	if err != nil {
 		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
-	resourceTableReader, _, err := ValidateResourceTableOptions(&options.ShortResourceTablePath, &options.ResourceTablePath, basePath)
-	if err != nil {
-		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+
+	var resourceTableReader io.Reader
+	hasResourceTablePath := options.ResourceTablePath != "" || options.ShortResourceTablePath != ""
+	if model.Resource == execmodel.ResourceModeFinite && !hasResourceTablePath {
+		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: resource table (-%s) is required for the %s resource mode", ResourceTableShortFlag, model.Resource)
+	}
+	if hasResourceTablePath {
+		resourceTableReader, _, err = ValidateResourceTableOptions(&options.ShortResourceTablePath, &options.ResourceTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
 	}
 	atomicDeliverableTableReader, _, err := ValidateAtomicDeliverableTableOptions(&options.ShortAtomicDeliverableTablePath, &options.AtomicDeliverableTablePath, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
 	}
-	compositeDeliverableTableReader, _, err := ValidateCompositeDeliverableTableOptions(&options.ShortCompositeDeliverableTablePath, &options.CompositeDeliverableTablePath, basePath)
-	if err != nil {
-		return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+
+	var compositeDeliverableTableReader io.Reader
+	if options.CompositeDeliverableTablePath != "" || options.ShortCompositeDeliverableTablePath != "" {
+		compositeDeliverableTableReader, _, err = ValidateCompositeDeliverableTableOptions(&options.ShortCompositeDeliverableTablePath, &options.CompositeDeliverableTablePath, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("tools.ValidateAllFSMOptions: %w", err)
+		}
 	}
 
 	var compositeProcessTableReader io.Reader
@@ -427,13 +714,15 @@ func ValidateAllFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions
 		MilestoneTableReader:                 milestoneTableReader,
 		GroupTableReader:                     groupTableReader,
 		MaximalAvailableAllocationsThreshold: options.MaximalAvailableAllocationsThreshold,
+		Model:                                model,
 	}, nil
 }
 
-// ValidatePossibleFSMOptions validates FSMRawOptions treating all fields as optional.
-// Each field is opened only when its path is non-empty; otherwise the reader is nil.
 func ValidatePossibleFSMOptions(options *FSMRawOptions, basePath string) (*FSMOptions, error) {
-	var err error
+	model, err := ResolveModel(*options, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("tools.ValidatePossibleFSMOptions: %w", err)
+	}
 
 	var pfdReader io.Reader
 	if options.PFDPath != "" || options.ShortPFDPath != "" {
@@ -509,6 +798,7 @@ func ValidatePossibleFSMOptions(options *FSMRawOptions, basePath string) (*FSMOp
 		MilestoneTableReader:                 milestoneTableReader,
 		GroupTableReader:                     groupTableReader,
 		MaximalAvailableAllocationsThreshold: options.MaximalAvailableAllocationsThreshold,
+		Model:                                model,
 	}, nil
 }
 
@@ -548,22 +838,21 @@ func (q SearchQualityPreset) Quality(randomSeed int64) fsm.Quality {
 }
 
 type SearchRawOptions struct {
-	// Mode is the search mode. best searches for optimal solutions, better searches for better solutions. poor returns approximate solutions using greedy method.
-	Best   bool
-	Better bool
-	Poor   bool
+	Best    bool
+	Better  bool
+	Poor    bool
+	Poorest bool
 
-	// QualityPreset is the quality preset. Ignored when Mode is best.
 	QualityPreset string
 
-	// Quality is the quality. Ignored when QualityPreset is not "custom" or when Mode is best.
 	Quality fsm.Quality
 }
 
 func DeclareSearchOptions(flags *flag.FlagSet, options *SearchRawOptions, randomSeed int64) {
 	flags.BoolVar(&options.Best, "best", false, "search best plan")
 	flags.BoolVar(&options.Better, "better", false, "search better plan")
-	flags.BoolVar(&options.Poor, "poor", false, "search plan by greedy algorithm (faster than best and better)")
+	flags.BoolVar(&options.Poor, "poor", false, "search plan by greedy algorithm (faster than best and better; ties broken pseudo-randomly by -random-seed)")
+	flags.BoolVar(&options.Poorest, "poorest", false, "search plan by fast greedy allocation without enumerating allocations (fastest and deterministic; completes even where -poor does not)")
 	flags.StringVar(&options.QualityPreset, "quality", "small", "quality preset (available: s, m, l, xl, xxl)")
 	flags.Int64Var(&options.Quality.RandomSeed, "random-seed", randomSeed, "random seed")
 
@@ -576,12 +865,16 @@ func DeclareSearchOptions(flags *flag.FlagSet, options *SearchRawOptions, random
 }
 
 func ValidateSearchOptions(searchRawOptions *SearchRawOptions) (fsm.SearchFunc, error) {
-	if !searchRawOptions.Best && !searchRawOptions.Better && !searchRawOptions.Poor {
-		return nil, fmt.Errorf("cmd.ValidateSearchOptions: either best or better or poor must be true")
+	if !searchRawOptions.Best && !searchRawOptions.Better && !searchRawOptions.Poor && !searchRawOptions.Poorest {
+		return nil, fmt.Errorf("cmd.ValidateSearchOptions: either best or better or poor or poorest must be true")
+	}
+
+	if searchRawOptions.Poorest {
+		return fsm.SearchPoorest(searchRawOptions.Quality.RandomSeed), nil
 	}
 
 	if searchRawOptions.Poor {
-		return fsm.SearchFastest(), nil
+		return fsm.SearchFastest(searchRawOptions.Quality.RandomSeed), nil
 	}
 
 	if searchRawOptions.Best {
@@ -637,12 +930,16 @@ func ValidateSearchOptions(searchRawOptions *SearchRawOptions) (fsm.SearchFunc, 
 }
 
 func ValidateSearchWithPrefixOptions(searchRawOptions *SearchRawOptions) (fsm.SearchWithPrefixFunc, error) {
-	if !searchRawOptions.Best && !searchRawOptions.Better && !searchRawOptions.Poor {
-		return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: either best or better or poor must be true")
+	if !searchRawOptions.Best && !searchRawOptions.Better && !searchRawOptions.Poor && !searchRawOptions.Poorest {
+		return nil, fmt.Errorf("cmd.ValidateSearchWithPrefixOptions: either best or better or poor or poorest must be true")
+	}
+
+	if searchRawOptions.Poorest {
+		return fsm.SearchPoorestWithPrefix(searchRawOptions.Quality.RandomSeed), nil
 	}
 
 	if searchRawOptions.Poor {
-		return fsm.SearchFastestWithPrefix(), nil
+		return fsm.SearchFastestWithPrefix(searchRawOptions.Quality.RandomSeed), nil
 	}
 
 	if searchRawOptions.Best {
@@ -693,11 +990,11 @@ func ValidateSearchWithPrefixOptions(searchRawOptions *SearchRawOptions) (fsm.Se
 }
 
 type BusinessTimeFuncRawOptions struct {
-	StartDay                  string
-	StartTime                 string
-	Duration                  float64
-	Weekdays                  string
-	AdditionalNotBusinessDays string
+	StartDay                  string  `json:"start_day,omitempty"`
+	StartTime                 string  `json:"start_time,omitempty"`
+	Duration                  float64 `json:"duration,omitempty"`
+	Weekdays                  string  `json:"weekdays,omitempty"`
+	AdditionalNotBusinessDays string  `json:"not_biz_days,omitempty"`
 }
 
 func DeclareBusinessTimeFuncOptions(flags *flag.FlagSet, options *BusinessTimeFuncRawOptions) {
@@ -810,8 +1107,10 @@ func ValidateBusinessTimeFuncOptions(options *BusinessTimeFuncRawOptions) (*Busi
 }
 
 type PlanOutputFormatRawOptions struct {
-	OutputFormat               string
-	BusinessTimeFuncRawOptions BusinessTimeFuncRawOptions
+	OutputFormat    string `json:"output_format,omitempty"`
+	EmphasisTSVPath string `json:"emphasis_tsv_path,omitempty"`
+
+	BusinessTimeFuncRawOptions
 }
 
 type PlanOutputFormat string
@@ -826,41 +1125,64 @@ const (
 
 func DeclarePlanOutputFormatOptions(flags *flag.FlagSet, options *PlanOutputFormatRawOptions) {
 	DeclareBusinessTimeFuncOptions(flags, &options.BusinessTimeFuncRawOptions)
-	flags.StringVar(&options.OutputFormat, "out-format", "", "output format (available: google-spreadsheet-tsv, plan-json, timeline-json, mermaid, plantuml)")
+	flags.StringVar(&options.OutputFormat, OutFormatFlag, "", "output format (available: google-spreadsheet-tsv, plan-json, timeline-json, mermaid, plantuml)")
+	DeclareEmphasisTSVOptions(flags, &options.EmphasisTSVPath)
 }
 
-var businessTimeFlagNames = []string{"start", "start-time", "duration", "weekdays", "not-biz-days"}
+func DeclareEmphasisTSVOptions(flags *flag.FlagSet, path *string) {
+	flags.StringVar(path, EmphasisTSVFlag, "", "path to the emphasis ID table (TSV with an ID column. e.g. the criticalpath output filtered by qhs)")
+}
 
-func collectExplicitBusinessTimeFlags(flags *flag.FlagSet) []string {
-	set := make(map[string]struct{}, len(businessTimeFlagNames))
-	for _, name := range businessTimeFlagNames {
-		set[name] = struct{}{}
+func ValidateEmphasisTSVOptions(path string) (*emphasis.Set, error) {
+	if path == "" {
+		return nil, nil
 	}
-	var explicit []string
-	flags.Visit(func(f *flag.Flag) {
-		if _, ok := set[f.Name]; ok {
-			explicit = append(explicit, f.Name)
-		}
-	})
-	return explicit
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("tools.ValidateEmphasisTSVOptions: %w", err)
+	}
+	defer f.Close()
+
+	em, err := emphasis.Parse(f)
+	if err != nil {
+		return nil, fmt.Errorf("tools.ValidateEmphasisTSVOptions: %w", err)
+	}
+	return em, nil
 }
 
-func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, flags *flag.FlagSet, logger *slog.Logger) (fsmreporter.PlanReporter, PlanOutputFormat, error) {
+func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, config ProjectConfig, logger *slog.Logger) (fsmreporter.PlanReporter, PlanOutputFormat, error) {
+	explicitBusinessTimeFlags := config.ExplicitBusinessTimeFlags
+
+	em, err := ValidateEmphasisTSVOptions(options.EmphasisTSVPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
+	}
+
 	switch options.OutputFormat {
 	case "", "google-spreadsheet-tsv":
 		businessTimeFuncOptions, err := ValidateBusinessTimeFuncOptions(&options.BusinessTimeFuncRawOptions)
 		if err != nil {
 			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
 		}
-		return fsmreporter.NewGoogleSpreadsheetTimelineTSVReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatGoogleSpreadsheetTSV, nil
+		return fsmreporter.NewGoogleSpreadsheetTimelineTSVReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, em, logger), PlanOutputFormatGoogleSpreadsheetTSV, nil
 
 	case "plan-json":
-		if explicit := collectExplicitBusinessTimeFlags(flags); len(explicit) > 0 {
-			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: business-time flags cannot be used with plan-json output format: %v", explicit)
+		if len(explicitBusinessTimeFlags) > 0 {
+			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: business time flags cannot be used with plan-json output format: %v", explicitBusinessTimeFlags)
+		}
+		if config.ExplicitEmphasisTSVFlag {
+			return nil, "", errEmphasisNotAvailable("plan-json")
 		}
 		return fsmreporter.NewPlanJSONReporter(), PlanOutputFormatPlanJSON, nil
 
 	case "timeline-json":
+		if len(explicitBusinessTimeFlags) > 0 {
+			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: business time flags cannot be used with timeline-json output format: %v", explicitBusinessTimeFlags)
+		}
+		if config.ExplicitEmphasisTSVFlag {
+			return nil, "", errEmphasisNotAvailable("timeline-json")
+		}
 		return fsmreporter.NewTimelineJSONReporter(logger), PlanOutputFormatTimelineJSON, nil
 
 	case "mermaid":
@@ -868,16 +1190,20 @@ func ValidatePlanOutputFormat(options *PlanOutputFormatRawOptions, flags *flag.F
 		if err != nil {
 			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
 		}
-		return fsmreporter.NewMermaidGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatMermaid, nil
+		return fsmreporter.NewMermaidGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, em, logger), PlanOutputFormatMermaid, nil
 
 	case "plantuml":
 		businessTimeFuncOptions, err := ValidateBusinessTimeFuncOptions(&options.BusinessTimeFuncRawOptions)
 		if err != nil {
 			return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: %w", err)
 		}
-		return fsmreporter.NewPlantUMLGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, logger), PlanOutputFormatPlantUML, nil
+		return fsmreporter.NewPlantUMLGanttReporter(businessTimeFuncOptions.StartDay, businessTimeFuncOptions.BusinessTimeFunc, em, logger), PlanOutputFormatPlantUML, nil
 
 	default:
 		return nil, "", fmt.Errorf("tools.ValidatePlanOutputFormat: invalid output format: %q", options.OutputFormat)
 	}
+}
+
+func errEmphasisNotAvailable(outputFormat string) error {
+	return fmt.Errorf("tools.ValidatePlanOutputFormat: -%s is not available for the %s output format (available: google-spreadsheet-tsv, mermaid, plantuml)", EmphasisTSVFlag, outputFormat)
 }

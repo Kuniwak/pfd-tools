@@ -9,6 +9,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pairs"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/sets"
@@ -141,6 +142,36 @@ func TestValidMaxRevision(t *testing.T) {
 			},
 			Expected: []checkers.Problem{},
 		},
+		"skip deliverable missing from table": {
+
+			PFD: pfd.NewSafePFD(
+				map[pfd.AtomicProcessID]string{
+					"P1": "P1",
+				},
+				map[pfd.AtomicDeliverableID]string{
+					"D1": "D1",
+					"D2": "D2",
+				},
+				map[pfd.AtomicProcessID]*pfd.RelationTriple{
+					"P1": {
+						Inputs:         sets.New(pfd.AtomicDeliverableID.Compare, "D1"),
+						FeedbackInputs: sets.New(pfd.AtomicDeliverableID.Compare),
+						Outputs:        sets.New(pfd.AtomicDeliverableID.Compare, "D2"),
+					},
+				},
+				map[pfd.CompositeProcessID]*pairs.Pair[string, *sets.Set[pfd.AtomicProcessID]]{},
+				map[pfd.CompositeDeliverableID]*pairs.Pair[string, *sets.Set[pfd.AtomicDeliverableID]]{},
+			),
+			AtomicDeliverableTable: &pfd.AtomicDeliverableTable{
+				ExtraHeaders: []string{fsmtable.MaxRevisionHeaderEn},
+				Rows: []*pfd.AtomicDeliverableRow{
+					{ID: "D2", Description: "Deliverable 2", ExtraCells: []string{"1"}},
+				},
+			},
+			Expected: []checkers.Problem{
+				checkers.NewProblem("malformed-max-revision", checkers.SeverityError, fsmcommon.NewLocation(fsmcommon.LocationTypeAtomicDeliverableTable, fsmcommon.NewAtomicDeliverableID("D2"))),
+			},
+		},
 		"ok (not feedback source)": {
 			PFD: pfd.NewSafePFD(
 				map[pfd.AtomicProcessID]string{
@@ -179,7 +210,7 @@ func TestValidMaxRevision(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(tc.PFD, nil, tc.AtomicDeliverableTable, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
+				tgt := &fsmcommon.Target{PFD: tc.PFD, AtomicDeliverableTable: tc.AtomicDeliverableTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: slog.New(slogtest.NewTestHandler(t))}
 				if err := ValidMaxRevision.Check(tgt, ch); err != nil {
 					t.Errorf("ValidMaxRevision.Check: %v", err)
 				}

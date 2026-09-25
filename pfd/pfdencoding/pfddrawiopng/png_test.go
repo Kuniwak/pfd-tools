@@ -9,18 +9,13 @@ import (
 	"testing"
 )
 
-// pngSignature is the 8-byte PNG file signature.
 var pngSignature = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 
-// chunk represents a single PNG chunk for tests.
 type chunk struct {
 	Type string
 	Data []byte
 }
 
-// buildPNG builds a PNG byte stream consisting of the standard 8-byte
-// signature followed by the given chunks. CRC fields are set to four
-// zero bytes (ExtractMxfile does not validate them).
 func buildPNG(chunks []chunk) []byte {
 	buf := bytes.NewBuffer(nil)
 	buf.Write(pngSignature)
@@ -35,7 +30,6 @@ func buildPNG(chunks []chunk) []byte {
 	return buf.Bytes()
 }
 
-// tEXtPayload builds a tEXt chunk data payload from a keyword and value.
 func tEXtPayload(keyword, value string) []byte {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString(keyword)
@@ -124,8 +118,6 @@ func TestExtractMxfile(t *testing.T) {
 	}
 }
 
-// chunkSlice extracts chunks from a PNG byte stream for inspection in tests.
-// Returns chunks as (type, data, crc4) triples in order.
 func chunkSlice(t *testing.T, png []byte) []struct {
 	Type string
 	Data []byte
@@ -176,7 +168,7 @@ func TestReplaceMxfile(t *testing.T) {
 		Input         []byte
 		NewXML        []byte
 		ExpectedError bool
-		// Verify is invoked when no error is expected.
+
 		Verify func(t *testing.T, originalChunks, outputChunks []struct {
 			Type string
 			Data []byte
@@ -413,4 +405,3 @@ func TestReplaceMxfile(t *testing.T) {
 		})
 	}
 }
-

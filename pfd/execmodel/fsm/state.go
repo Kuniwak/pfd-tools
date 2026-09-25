@@ -17,31 +17,20 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// State is the state of the FSM.
 type State struct {
-	// Time is the current time.
 	Time execmodel.Time `json:"time"`
 
-	// RemainedVolumeMap is the remaining work volume at the current time.
-	// IDs other than atomic processes are not included.
 	RemainedVolumeMap map[pfd.AtomicProcessID]Volume `json:"remained_volume"`
 
-	// RevisionMap is the revision of deliverables at the current time. A revision of 0 means not yet generated.
-	// IDs other than deliverables are not included.
 	RevisionMap map[pfd.AtomicDeliverableID]int `json:"revision"`
 
-	// NumOfCompleteMap is the number of times an atomic process has completed execution at the current time.
-	// IDs other than atomic processes are not included.
 	NumOfCompleteMap map[pfd.AtomicProcessID]int `json:"num_of_complete"`
 
-	// AllocationShouldContinue is the allocation from time t-1 to time t.
 	AllocationShouldContinue Allocation `json:"allocation_should_continue"`
 
-	// UpdatedDeliverablesNotHandled is the set of atomic processes that have unhandled deliverables updated at the current time.
 	UpdatedDeliverablesNotHandled map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID] `json:"updated_deliverables_not_handled"`
 }
 
-// NewState returns a new State.
 func NewState(
 	time execmodel.Time,
 	revisionMap map[pfd.AtomicDeliverableID]int,

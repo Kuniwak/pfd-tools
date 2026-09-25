@@ -22,14 +22,12 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfdrun", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: pfdrun [options] [-p <pfd> [-a <atomic-process-table>] [-d <deliverable-table>] [-r <resource-table>]] [-f <config>] [-plan <plan>]")
-		fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfdrun [options] [-p <pfd> [-ap <atomic-process-table>] [-ad <atomic-deliverable-table>] [-r <resource-table>]] [-f <config>] [-plan <plan>]", ShortHelp)
 		fmt.Fprintf(flags.Output(), `
 Example
     $ pfdrun -f path/to/config.json
 
-    $ pfdrun -p path/to/pfd.drawio -a path/to/atomic_proc.tsv -d path/to/deliv.tsv -r path/to/resource.tsv
+    $ pfdrun -p path/to/pfd.drawio -ap path/to/atomic_proc.tsv -ad path/to/deliv.tsv -r path/to/resource.tsv
 
     $ pfdrun -f path/to/config.json -plan path/to/plan.json
 `)
@@ -57,6 +55,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}

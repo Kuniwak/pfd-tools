@@ -4,5 +4,7 @@
         "atomic_deliverable_table": "deliv.tsv",
         "composite_process_table": "comp_proc.tsv",
         "composite_deliverable_table": "comp_deliv.tsv",
-        "resource_table": "resource.tsv"
+        "resource_table": "resource.tsv",
+        "resource_mode": "finite",
+        "feedback_mode": "enabled"
 }

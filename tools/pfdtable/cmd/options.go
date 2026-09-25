@@ -9,10 +9,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/Kuniwak/pfd-tools/cli"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/pfd/pfdtable"
 	"github.com/Kuniwak/pfd-tools/table"
@@ -27,15 +27,12 @@ const (
 	TableCategoryAll TableCategory = "ALL"
 )
 
-// ProjectFile holds decoded project.json data and its resolved location on disk.
 type ProjectFile struct {
 	Path     string
 	BasePath string
 	Raw      tools.FSMRawOptions
 }
 
-// existingTablePath returns the absolute path of the existing table for the given type.
-// Returns "" if the corresponding field is absent in project.json.
 func (p *ProjectFile) existingTablePath(category TableCategory, pfdType pfd.TableType, fsmType fsmtable.TableType) string {
 	var rel string
 	switch category {
@@ -66,18 +63,10 @@ func (p *ProjectFile) existingTablePath(category TableCategory, pfdType pfd.Tabl
 	return projResolve(p.BasePath, rel)
 }
 
-// projResolve resolves a path from a project.json relative to basePath.
-// Absolute paths are returned as-is.
 func projResolve(basePath, rel string) string {
-	if filepath.IsAbs(rel) {
-		return rel
-	}
-	return filepath.Join(basePath, rel)
+	return tools.ResolvePath(basePath, rel)
 }
 
-// AllExistingTables holds existing table readers for -t all + project.json refresh.
-// A nil field means that table is absent in project.json and will be generated fresh from PFD.
-// M and G are always derived fresh from AP and are not loaded here.
 type AllExistingTables struct {
 	AP io.Reader
 	AD io.Reader
@@ -85,40 +74,38 @@ type AllExistingTables struct {
 	R  io.Reader
 }
 
-// InplaceTargets maps table identifiers to the absolute paths to overwrite on -inplace.
 type InplaceTargets map[string]string
 
 type Options struct {
 	CommonOptions                   *tools.CommonOptions
-	Writer                          io.Writer
 	HasPFD                          bool
 	PFDPath                         string
 	PFDReader                       io.Reader
 	AtomicProcessTableReader        io.Reader
-	HasCompositeDeliverableTable    bool
 	CompositeDeliverableTableReader io.Reader
 	ExistingTableReader             io.Reader
 	HasExistingTable                bool
 	IsInplace                       bool
-	TableCategory                   TableCategory
-	PFDTableType                    pfd.TableType
-	FSMTableType                    fsmtable.TableType
-	Mode                            pfdtable.Mode
-	InputFormat                     table.Format
-	OutputFormat                    table.Format
-	OutDir                          string
-	ProjectFile                     *ProjectFile
-	AllExisting                     *AllExistingTables
-	InplaceTargets                  InplaceTargets
+
+	InplaceOutputPath string
+	TableCategory     TableCategory
+	PFDTableType      pfd.TableType
+	FSMTableType      fsmtable.TableType
+	Mode              pfdtable.Mode
+	Model             execmodel.Model
+	InputFormat       table.Format
+	OutputFormat      table.Format
+	OutDir            string
+	ProjectFile       *ProjectFile
+	AllExisting       *AllExistingTables
+	InplaceTargets    InplaceTargets
 }
 
 func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfdtable", flag.ContinueOnError)
 	flags.SetOutput(inout.Stderr)
 	flags.Usage = func() {
-		_, _ = fmt.Fprintln(flags.Output(), "Usage: pfdtable [options]")
-		_, _ = fmt.Fprintln(flags.Output(), "\nOptions")
-		flags.PrintDefaults()
+		tools.PrintUsageHeader(flags, "Usage: pfdtable [options]", ShortHelp)
 		_, _ = fmt.Fprintf(flags.Output(), `
 Example
   $ pfdtable -t ad -p path/to/pfd.drawio
@@ -137,7 +124,7 @@ Example
   ...
 
   $ # Copy to clipboard as RTF (it is useful for pasting into Confluence and Microsoft Word and so on)
-  $ pfdtable -t ad -o html path/to/pfd.drawio | textutil -stdin -format html -convert rtf -inputencoding UTF-8 -stdout | pbcopy
+  $ pfdtable -t ad -out-format html -p path/to/pfd.drawio | textutil -stdin -format html -convert rtf -inputencoding UTF-8 -stdout | pbcopy
 
   $ # Print updated fsmtable from the existing fsmtable
   $ pfdtable -t ad -existing path/to/existing.tsv -p path/to/pfd.drawio
@@ -156,6 +143,9 @@ Example
 	var commonRawOptions tools.CommonRawOptions
 	tools.DeclareCommonOptions(flags, &commonRawOptions)
 
+	var configShortPath, configLongPath string
+	tools.DeclareConfigOptions(flags, &configShortPath, &configLongPath)
+
 	var pfdShortPath, pfdLongPath string
 	tools.DeclarePFDOptions(flags, &pfdShortPath, &pfdLongPath)
 
@@ -167,14 +157,13 @@ Example
 
 	typeShortFlag := flags.String("t", "", "type of the table (available: ap(atomic-process), ad(atomic-deliverable), cp(composite-process), cd(composite-deliverable), r(resource), m(milestone), g(group), a(all); suffix '-plan' or '-plan-master' on ap/ad/a/all bootstraps required columns for pfdplan/planmaster (applies to AP/AD only; cp/cd are unaffected))")
 	typeFlag := flags.String("type", "", "type of the table (available: ap(atomic-process), ad(atomic-deliverable), cp(composite-process), cd(composite-deliverable), r(resource), m(milestone), g(group), a(all); suffix '-plan' or '-plan-master' on ap/ad/a/all bootstraps required columns for pfdplan/planmaster (applies to AP/AD only; cp/cd are unaffected))")
-	existingShortFlag := flags.String("f", "", "path of the existing fsmtable or project.json (alias of -existing)")
-	existingPathFlag := flags.String("existing", "", "path of the existing fsmtable or project.json (same as -f)")
+	existingPathFlag := flags.String("existing", "", "path of the existing fsmtable")
 	inplaceFlag := flags.Bool("inplace", false, "overwrite the file in place")
-	outDirFlag := flags.String("out-dir", "", "output directory (required for -t all)")
-	inputFormatShortFlag := flags.String("i", "", "format of the input PFD")
-	inputFormatFlag := flags.String("input-format", "", "format of the input PFD")
-	outputFormatShortFlag := flags.String("o", "", "format of the output fsmtable")
-	outputFormatFlag := flags.String("output-format", "", "format of the output fsmtable")
+	outDirFlag := flags.String(tools.OutDirFlag, "", "output directory (required for -t all)")
+	inputFormatFlag := flags.String(tools.InFormatFlag, "", "format of the input PFD")
+	var resourceModeFlag, feedbackModeFlag string
+	tools.DeclareExecModelOptions(flags, &resourceModeFlag, &feedbackModeFlag)
+	outputFormatFlag := flags.String(tools.OutFormatFlag, "", "format of the output fsmtable")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -188,6 +177,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -198,13 +190,14 @@ Example
 	}
 
 	existingPath := *existingPathFlag
-	cli.OverrideIfSet(&existingPath, *existingShortFlag)
 
-	// Detect and decode project.json early to enable fallback path resolution.
+	var configPath string
+	cli.OverrideIfSet(&configPath, configShortPath, configLongPath)
+
 	var projectFile *ProjectFile
-	isProjectJSON := existingPath != "" && strings.EqualFold(filepath.Ext(existingPath), ".json")
-	if isProjectJSON {
-		absProjPath, absErr := filepath.Abs(existingPath)
+	hasProjectFile := configPath != ""
+	if hasProjectFile {
+		absProjPath, absErr := filepath.Abs(configPath)
 		if absErr != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", absErr)
 		}
@@ -225,13 +218,21 @@ Example
 	}
 
 	var tableTypeString string
+	var projectRaw tools.FSMRawOptions
+	if projectFile != nil {
+		projectRaw = projectFile.Raw
+	}
+	model, err := tools.ResolveModel(projectRaw, resourceModeFlag, feedbackModeFlag)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
+	}
+
 	if *typeShortFlag != "" {
 		tableTypeString = *typeShortFlag
 	} else {
 		tableTypeString = *typeFlag
 	}
 
-	// Validate PFD from CLI flags, then fall back to project.json if not provided.
 	var pfdReader io.Reader
 	var pfdPath string
 	hasPFD := false
@@ -242,7 +243,7 @@ Example
 		}
 		hasPFD = true
 	}
-	if !hasPFD && isProjectJSON && projectFile.Raw.PFDPath != "" {
+	if !hasPFD && hasProjectFile && projectFile.Raw.PFDPath != "" {
 		resolvedPFD := projResolve(projectFile.BasePath, projectFile.Raw.PFDPath)
 		shortFallback := resolvedPFD
 		longFallback := ""
@@ -253,7 +254,6 @@ Example
 		hasPFD = true
 	}
 
-	// Validate CD from CLI flags, then fall back to project.json if not provided.
 	var compositeDeliverableTableReader io.Reader
 	hasCompositeDeliverableTable := compositeDeliverableTableShortPath != "" || compositeDeliverableTableLongPath != ""
 	if hasCompositeDeliverableTable {
@@ -265,7 +265,7 @@ Example
 	isAllTableType := tableTypeString == "a" || tableTypeString == "all" ||
 		tableTypeString == "a-plan" || tableTypeString == "all-plan" ||
 		tableTypeString == "a-plan-master" || tableTypeString == "all-plan-master"
-	if !hasCompositeDeliverableTable && isProjectJSON && !isAllTableType && projectFile.Raw.CompositeDeliverableTablePath != "" {
+	if !hasCompositeDeliverableTable && hasProjectFile && !isAllTableType && projectFile.Raw.CompositeDeliverableTablePath != "" {
 		cdPath := projResolve(projectFile.BasePath, projectFile.Raw.CompositeDeliverableTablePath)
 		compositeDeliverableTableReader, err = os.OpenFile(cdPath, os.O_RDONLY, 0644)
 		if err != nil {
@@ -274,9 +274,8 @@ Example
 		hasCompositeDeliverableTable = true
 	}
 
-	// Pre-compute AP path from project.json for use inside the switch when CLI didn't supply it.
 	var projAPPath string
-	if isProjectJSON && atomicProcessTableShortPath == "" && atomicProcessTableLongPath == "" && projectFile.Raw.AtomicProcessTablePath != "" {
+	if hasProjectFile && atomicProcessTableShortPath == "" && atomicProcessTableLongPath == "" && projectFile.Raw.AtomicProcessTablePath != "" {
 		projAPPath = projResolve(projectFile.BasePath, projectFile.Raw.AtomicProcessTablePath)
 	}
 
@@ -312,6 +311,10 @@ Example
 		tableCategory = TableCategoryPFD
 		pfdTableType = pfd.TableTypeCompositeProcess
 	case "cd", "composite-deliverable":
+
+		if *inplaceFlag && !hasPFD {
+			return nil, fmt.Errorf("cmd.ParseOptions: -p is required with -inplace: -t cd without a PFD would overwrite the existing table with an empty one")
+		}
 		tableCategory = TableCategoryPFD
 		pfdTableType = pfd.TableTypeCompositeDeliverable
 	case "r", "res", "resource":
@@ -330,6 +333,10 @@ Example
 		fsmTableType = fsmtable.TableTypeResource
 	case "m", "milestone":
 		hasAP := atomicProcessTableShortPath != "" || atomicProcessTableLongPath != "" || projAPPath != ""
+
+		if *inplaceFlag && !hasAP {
+			return nil, fmt.Errorf("cmd.ParseOptions: -ap is required with -inplace: -t m without an atomic process table would overwrite the existing table with an empty one")
+		}
 		if hasAP {
 			if projAPPath != "" {
 				apTableReader, err = os.OpenFile(projAPPath, os.O_RDONLY, 0644)
@@ -347,6 +354,10 @@ Example
 		fsmTableType = fsmtable.TableTypeMilestone
 	case "g", "group":
 		hasAP := atomicProcessTableShortPath != "" || atomicProcessTableLongPath != "" || projAPPath != ""
+
+		if *inplaceFlag && !hasAP {
+			return nil, fmt.Errorf("cmd.ParseOptions: -ap is required with -inplace: -t g without an atomic process table would overwrite the existing table with an empty one")
+		}
 		if hasAP {
 			if projAPPath != "" {
 				apTableReader, err = os.OpenFile(projAPPath, os.O_RDONLY, 0644)
@@ -363,10 +374,10 @@ Example
 		tableCategory = TableCategoryFSM
 		fsmTableType = fsmtable.TableTypeGroup
 	case "a", "all", "a-plan", "all-plan", "a-plan-master", "all-plan-master":
-		if isProjectJSON {
-			// -t all + project.json: requires exactly one of -out-dir or -inplace
+		if hasProjectFile {
+
 			if *outDirFlag == "" && !*inplaceFlag {
-				return nil, fmt.Errorf("cmd.ParseOptions: -t all with -existing project.json requires either -out-dir or -inplace")
+				return nil, fmt.Errorf("cmd.ParseOptions: -t all with -%s requires either -out-dir or -inplace", tools.ConfigShortFlag)
 			}
 			if *outDirFlag != "" && *inplaceFlag {
 				return nil, fmt.Errorf("cmd.ParseOptions: -out-dir and -inplace are mutually exclusive")
@@ -405,12 +416,7 @@ Example
 	}
 
 	var outputFormat table.Format
-	var outputFormatString string
-	if *outputFormatShortFlag != "" {
-		outputFormatString = *outputFormatShortFlag
-	} else {
-		outputFormatString = *outputFormatFlag
-	}
+	outputFormatString := *outputFormatFlag
 
 	switch outputFormatString {
 	case "tsv", "":
@@ -422,12 +428,7 @@ Example
 	}
 
 	var inputFormat table.Format
-	var inputFormatString string
-	if *inputFormatShortFlag != "" {
-		inputFormatString = *inputFormatShortFlag
-	} else {
-		inputFormatString = *inputFormatFlag
-	}
+	inputFormatString := *inputFormatFlag
 
 	switch inputFormatString {
 	case "tsv", "":
@@ -438,19 +439,17 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: invalid input format: %q", inputFormatString)
 	}
 
-	// Resolve the existing table path (from project.json) or use the TSV path directly.
 	var projExistingTablePath string
-	if isProjectJSON && tableCategory != TableCategoryAll {
+	if hasProjectFile && existingPath == "" && tableCategory != TableCategoryAll {
 		projExistingTablePath = projectFile.existingTablePath(tableCategory, pfdTableType, fsmTableType)
 		if projExistingTablePath == "" {
-			return nil, fmt.Errorf("cmd.ParseOptions: project.json has no entry for -t %q", tableTypeString)
+			return nil, fmt.Errorf("cmd.ParseOptions: the project config has no entry for -t %q (pass the table with -existing)", tableTypeString)
 		}
 	}
 
-	// For -t all + project.json: build AllExisting readers and InplaceTargets.
 	var allExisting *AllExistingTables
 	var inplaceTargets InplaceTargets
-	if isProjectJSON && tableCategory == TableCategoryAll {
+	if hasProjectFile && tableCategory == TableCategoryAll {
 		ae := &AllExistingTables{}
 		if *inplaceFlag {
 			inplaceTargets = make(InplaceTargets)
@@ -478,17 +477,14 @@ Example
 		if err := loadAllTable("ad", raw.AtomicDeliverableTablePath, &ae.AD); err != nil {
 			return nil, err
 		}
-		// CD: only register the inplace target; do not load for refresh because
-		// composite_deliverable_table in project.json points to the OUTPUT format
-		// (cd.tsv), which lacks the Deliverables column and cannot be re-parsed.
-		// Fresh generation from PFD is used instead (ae.CD stays nil).
+
 		if *inplaceFlag && raw.CompositeDeliverableTablePath != "" {
 			inplaceTargets["cd"] = projResolve(bp, raw.CompositeDeliverableTablePath)
 		}
 		if err := loadAllTable("r", raw.ResourceTablePath, &ae.R); err != nil {
 			return nil, err
 		}
-		// M and G are always derived fresh from AP; loading them from project.json is unnecessary.
+
 		if *inplaceFlag && raw.MilestoneTablePath != "" {
 			inplaceTargets["m"] = projResolve(bp, raw.MilestoneTablePath)
 		}
@@ -496,15 +492,23 @@ Example
 			inplaceTargets["g"] = projResolve(bp, raw.GroupTablePath)
 		}
 		allExisting = ae
+
+		if *inplaceFlag && apTableReader == nil {
+			for _, key := range []string{"r", "m", "g"} {
+				if path, ok := inplaceTargets[key]; ok {
+					return nil, fmt.Errorf("cmd.ParseOptions: atomic_process_table is required in project.json with -inplace: %s would be overwritten with an empty table", path)
+				}
+			}
+		}
 	}
 
 	var existingTableReader io.Reader
-	hasExistingTable := existingPath != ""
+	readPath := existingPath
+	if readPath == "" {
+		readPath = projExistingTablePath
+	}
+	hasExistingTable := readPath != ""
 	if hasExistingTable && tableCategory != TableCategoryAll {
-		readPath := existingPath
-		if isProjectJSON {
-			readPath = projExistingTablePath
-		}
 		bs, readErr := os.ReadFile(readPath)
 		if readErr != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", readErr)
@@ -516,18 +520,9 @@ Example
 		return nil, fmt.Errorf("cmd.ParseOptions: inplace flag is only valid when existing table is specified")
 	}
 
-	var writer io.Writer
+	inplaceOutputPath := ""
 	if *inplaceFlag && tableCategory != TableCategoryAll {
-		writePath := existingPath
-		if isProjectJSON && projExistingTablePath != "" {
-			writePath = projExistingTablePath
-		}
-		writer, err = os.OpenFile(writePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
-	} else {
-		writer = inout.Stdout
+		inplaceOutputPath = readPath
 	}
 
 	return &Options{
@@ -535,7 +530,6 @@ Example
 		HasPFD:                          hasPFD,
 		PFDPath:                         pfdPath,
 		PFDReader:                       pfdReader,
-		HasCompositeDeliverableTable:    hasCompositeDeliverableTable,
 		CompositeDeliverableTableReader: compositeDeliverableTableReader,
 		AtomicProcessTableReader:        apTableReader,
 		ExistingTableReader:             existingTableReader,
@@ -544,10 +538,11 @@ Example
 		PFDTableType:                    pfdTableType,
 		FSMTableType:                    fsmTableType,
 		Mode:                            mode,
+		Model:                           model,
 		OutputFormat:                    outputFormat,
 		InputFormat:                     inputFormat,
 		IsInplace:                       *inplaceFlag,
-		Writer:                          writer,
+		InplaceOutputPath:               inplaceOutputPath,
 		OutDir:                          *outDirFlag,
 		ProjectFile:                     projectFile,
 		AllExisting:                     allExisting,

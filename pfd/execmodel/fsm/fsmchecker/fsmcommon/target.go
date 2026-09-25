@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 )
 
@@ -14,6 +15,7 @@ type Target struct {
 	ResourceTable          *fsmtable.ResourceTable
 	MilestoneTable         *fsmtable.MilestoneTable
 	GroupTable             *fsmtable.GroupTable
+	Model                  execmodel.Model
 	Memoized               *Memoized
 	Logger                 *slog.Logger
 }
@@ -25,6 +27,7 @@ func NewTarget(
 	resourceTable *fsmtable.ResourceTable,
 	milestoneTable *fsmtable.MilestoneTable,
 	groupTable *fsmtable.GroupTable,
+	model execmodel.Model,
 	memoized *Memoized,
 	logger *slog.Logger,
 ) *Target {
@@ -35,6 +38,7 @@ func NewTarget(
 		ResourceTable:          resourceTable,
 		MilestoneTable:         milestoneTable,
 		GroupTable:             groupTable,
+		Model:                  model,
 		Memoized:               memoized,
 		Logger:                 logger,
 	}

@@ -1,43 +1,38 @@
 package allcheckers
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
+	"github.com/Kuniwak/pfd-tools/sets"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Kuniwak/pfd-tools/pfd/pfdcheckers/pfdcommon"
 )
 
-type LintFunc func(
-	up *pfd.PFD,
-	apTable *pfd.AtomicProcessTable,
-	adTable *pfd.AtomicDeliverableTable,
-	cpTable *pfd.CompositeProcessTable,
-	cdTable *pfd.CompositeDeliverableTable,
-	rTable *fsmtable.ResourceTable,
-	mt *fsmtable.MilestoneTable,
-	gt *fsmtable.GroupTable,
-	ch chan<- checkers.Problem,
-) error
+type Target struct {
+	PFD                       *pfd.PFD
+	AtomicProcessTable        *pfd.AtomicProcessTable
+	AtomicDeliverableTable    *pfd.AtomicDeliverableTable
+	CompositeProcessTable     *pfd.CompositeProcessTable
+	CompositeDeliverableTable *pfd.CompositeDeliverableTable
+	ResourceTable             *fsmtable.ResourceTable
+	MilestoneTable            *fsmtable.MilestoneTable
+	GroupTable                *fsmtable.GroupTable
+	Model                     execmodel.Model
+}
+
+type LintFunc func(t Target, ch chan<- checkers.Problem) error
 
 func NewLintFunc(logger *slog.Logger) LintFunc {
-	return func(
-		up *pfd.PFD,
-		apTable *pfd.AtomicProcessTable,
-		adTable *pfd.AtomicDeliverableTable,
-		cpTable *pfd.CompositeProcessTable,
-		cdTable *pfd.CompositeDeliverableTable,
-		rTable *fsmtable.ResourceTable,
-		mt *fsmtable.MilestoneTable,
-		gt *fsmtable.GroupTable,
-		ch chan<- checkers.Problem,
-	) error {
+	return func(t Target, ch chan<- checkers.Problem) error {
 		var eg errgroup.Group
 
 		runningWorkers := 2
@@ -53,8 +48,8 @@ func NewLintFunc(logger *slog.Logger) LintFunc {
 				}
 			}()
 
-			m := pfdcommon.NewMemoized(up, logger)
-			if err := PFDCheckers.Check(pfdcommon.NewTarget(up, apTable, adTable, cpTable, cdTable, m), ch); err != nil {
+			m := pfdcommon.NewMemoized(t.PFD, logger)
+			if err := PFDCheckers.Check(pfdcommon.NewTarget(t.PFD, t.AtomicProcessTable, t.AtomicDeliverableTable, t.CompositeProcessTable, t.CompositeDeliverableTable, m), ch); err != nil {
 				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
 			}
 
@@ -70,17 +65,21 @@ func NewLintFunc(logger *slog.Logger) LintFunc {
 				}
 			}()
 
-			p, err := pfd.NewSafePFDByUnsafePFD(up)
+			if err := t.Model.Validate(); err != nil {
+				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
+			}
+
+			p, err := pfd.NewSafePFDByUnsafePFD(t.PFD)
 			if err != nil {
-				// NOTE: Should be reported by PFD Checker side, so skip.
+
 				return nil
 			}
 
-			m, err := fsmcommon.NewMemoized(apTable, adTable, rTable, mt)
+			m, err := fsmcommon.NewMemoized(t.AtomicProcessTable, t.AtomicDeliverableTable, t.ResourceTable, t.MilestoneTable)
 			if err != nil {
 				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
 			}
-			if err := FSMCheckers.Check(fsmcommon.NewTarget(p, apTable, adTable, rTable, mt, gt, m, logger), ch); err != nil {
+			if err := FSMCheckers.Check(&fsmcommon.Target{PFD: p, AtomicProcessTable: t.AtomicProcessTable, AtomicDeliverableTable: t.AtomicDeliverableTable, ResourceTable: t.ResourceTable, MilestoneTable: t.MilestoneTable, GroupTable: t.GroupTable, Model: t.Model, Memoized: m, Logger: logger}, ch); err != nil {
 				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
 			}
 
@@ -95,23 +94,13 @@ func NewLintFunc(logger *slog.Logger) LintFunc {
 	}
 }
 
-func Lint(
-	p *pfd.PFD,
-	apTable *pfd.AtomicProcessTable,
-	adTable *pfd.AtomicDeliverableTable,
-	cpTable *pfd.CompositeProcessTable,
-	cdTable *pfd.CompositeDeliverableTable,
-	rTable *fsmtable.ResourceTable,
-	mt *fsmtable.MilestoneTable,
-	gt *fsmtable.GroupTable,
-	logger *slog.Logger,
-) ([]checkers.Problem, error) {
+func Lint(t Target, logger *slog.Logger) ([]checkers.Problem, error) {
 	lintFunc := NewLintFunc(logger)
 	ch := make(chan checkers.Problem)
 
 	var eg errgroup.Group
 	eg.Go(func() error {
-		if err := lintFunc(p, apTable, adTable, cpTable, cdTable, rTable, mt, gt, ch); err != nil {
+		if err := lintFunc(t, ch); err != nil {
 			return fmt.Errorf("allcheckers.Lint: %w", err)
 		}
 		return nil
@@ -130,4 +119,16 @@ func Lint(
 	}
 
 	return ps, nil
+}
+
+func CompositeDeliverableTableProblems(cdt *pfd.CompositeDeliverableTable, logger *slog.Logger) ([]checkers.Problem, error) {
+
+	if _, err := pfd.FlattenDeliverableComposition(cdt.NodeIDMap(logger), sets.New((*pfd.Node).Compare)); err != nil {
+		var cycleErr *pfd.CompositionCycleError
+		if !errors.As(err, &cycleErr) {
+			return nil, fmt.Errorf("allcheckers.CompositeDeliverableTableProblems: %w", err)
+		}
+		return []checkers.Problem{checkers.NewProblem("acyclic-cd-comp", checkers.SeverityError, pfdcommon.NewLocations(pfdcommon.NewLocation(pfdcommon.LocationTypeCompositeDeliverableTable, cycleErr.Cycle...))...)}, nil
+	}
+	return []checkers.Problem{}, nil
 }

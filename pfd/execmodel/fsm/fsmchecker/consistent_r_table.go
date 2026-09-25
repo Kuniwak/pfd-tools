@@ -20,7 +20,7 @@ var ConsistentResourceTable = checkers.AtomicChecker[*fsmcommon.Target]{
 		for _, entryText := range t.Memoized.NeededResourceSetsMap {
 			entries, err := fsmtable.ParseNeededResourceSetEntry(entryText)
 			if err != nil {
-				// NOTE: Skip because it will be caught by valid-resources-set.
+
 				continue
 			}
 			for _, entry := range entries.Iter() {

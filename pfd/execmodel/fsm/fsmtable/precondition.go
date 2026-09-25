@@ -68,23 +68,6 @@ func PreconditionFuncByTableFunc(table *pfd.AtomicProcessTable, matchFunc pfd.Co
 	return preconditionMap, nil
 }
 
-// ParsePrecondition parses the following syntax rules:
-//
-//		precondition = *SP *1(or_expr)
-//
-//		or_expr      = and_expr *( "||" *SP and_expr)
-//		and_expr     = primary  *( "&&" *SP primary )
-//
-//		primary      = "(" *SP precondition ")" *SP
-//		             / "\execBetween(" *SP node_id *SP "," *SP bound_expr *SP "," *SP bound_expr *SP ")" *SP
-//		             / "\complete(" *SP ("*" / node_id) *SP ")" *SP
-//		             / "\exec(" *SP node_id *SP ")" *SP
-//		             / "!" *SP precondition *SP
-//
-//		node_id      = *(DIGIT / ALPHA / "_" / "-" / ".") 1*(DIGIT / ALPHA)
-//		bound_expr   = int / "\inf" / "\maxRev(" *SP node_id *SP ")" *SP
-//		int          = ["-"] 1*DIGIT
-//	 	SP           = " "
 func ParsePrecondition(s string, ap pfd.AtomicProcessID) (*fsm.Precondition, error) {
 	rs := []rune(s)
 

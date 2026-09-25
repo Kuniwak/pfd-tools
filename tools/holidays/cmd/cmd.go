@@ -9,6 +9,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "営業日と見做さない日付の一覧を CSV 形式で出力します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	opts, err := ParseOptions(args, inout)
 	if err != nil {
@@ -24,6 +26,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 	if options.CommonOptions.Help {
+		return nil
+	}
+
+	if options.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 

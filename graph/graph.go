@@ -112,7 +112,7 @@ func (g *Graph) Minimals() *sets.Set[Node] {
 }
 
 func (g *Graph) Cycles() *sets.Set[[]Node] {
-	// Build adjacency list for directed graph (outgoing edges only)
+
 	adj := make(map[Node][]Node, g.Nodes.Len())
 	for _, u := range g.Nodes.Iter() {
 		adj[u] = nil
@@ -122,21 +122,20 @@ func (g *Graph) Cycles() *sets.Set[[]Node] {
 		v := e.Second
 		adj[u] = append(adj[u], v)
 	}
-	// Sort adjacent nodes for deterministic enumeration
+
 	for u := range adj {
 		slices.SortFunc(adj[u], Node.Compare)
 	}
 
-	// Nodes themselves are also in deterministic order
 	nodes := g.Nodes.Slice()
 	slices.SortFunc(nodes, Node.Compare)
 
 	cycles := make([][]Node, 0)
 
-	blocked := make(map[Node]bool)          // blocked set for Johnson's algorithm
-	B := make(map[Node]map[Node]bool)       // back-link set
-	stack := make([]Node, 0, g.Nodes.Len()) // current path
-	var s Node                              // current start node (explore only nodes >= this node)
+	blocked := make(map[Node]bool)
+	B := make(map[Node]map[Node]bool)
+	stack := make([]Node, 0, g.Nodes.Len())
+	var s Node
 
 	var unblock func(u Node)
 	unblock = func(u Node) {
@@ -159,12 +158,12 @@ func (g *Graph) Cycles() *sets.Set[[]Node] {
 		blocked[v] = true
 
 		for _, w := range adj[v] {
-			// Do not explore nodes smaller than s (subgraph induction)
+
 			if Node.Compare(w, s) < 0 {
 				continue
 			}
 			if w == s {
-				// Record simple cycle only once (stack contains s..v)
+
 				c := make([]Node, len(stack))
 				copy(c, stack)
 				cycles = append(cycles, c)
@@ -196,7 +195,7 @@ func (g *Graph) Cycles() *sets.Set[[]Node] {
 
 	for _, start := range nodes {
 		s = start
-		// Initialize blocked and B (for nodes >= s)
+
 		for _, u := range nodes {
 			if Node.Compare(u, s) >= 0 {
 				blocked[u] = false
@@ -206,7 +205,6 @@ func (g *Graph) Cycles() *sets.Set[[]Node] {
 		_ = circuit(s)
 	}
 
-	// Fix output order (length first → lexicographic)
 	cmpCycle := func(a, b []Node) int {
 		if len(a) < len(b) {
 			return -1
@@ -222,8 +220,6 @@ func (g *Graph) Cycles() *sets.Set[[]Node] {
 	return &res
 }
 
-// WeaklyConnectedComponents returns the weakly connected components when g is viewed as undirected.
-// The return value is a slice of Node sets for each component. The order of weakly connected components is undefined.
 func (g *Graph) WeaklyConnectedComponents() *sets.Set[*sets.Set[Node]] {
 	adj := make(map[Node][]Node, g.Nodes.Len())
 	for _, u := range g.Nodes.Iter() {
@@ -270,7 +266,7 @@ func BFSComponent(start Node, adj map[Node][]Node, visited map[Node]bool) *sets.
 }
 
 func (g *Graph) TopologicalSort() []Node {
-	// Build adjacency list and in-degrees
+
 	adj := make(map[Node][]Node, g.Nodes.Len())
 	inDeg := make(map[Node]int, g.Nodes.Len())
 	for _, u := range g.Nodes.Iter() {
@@ -284,7 +280,6 @@ func (g *Graph) TopologicalSort() []Node {
 		inDeg[v]++
 	}
 
-	// Maintain set of nodes with in-degree 0 (in Node.Compare order)
 	zero := make([]Node, 0)
 	for u := range adj {
 		if inDeg[u] == 0 {
@@ -313,7 +308,6 @@ func (g *Graph) TopologicalSort() []Node {
 		}
 	}
 
-	// If there are cycles, no topological order exists
 	if len(order) != g.Nodes.Len() {
 		return nil
 	}

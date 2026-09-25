@@ -9,6 +9,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/locale"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable/encoding/fsmtsv"
@@ -25,16 +26,13 @@ type FSMEnvSeed struct {
 	MilestoneTable                       *fsmtable.MilestoneTable
 	GroupTable                           *fsmtable.GroupTable
 	MaximalAvailableAllocationsThreshold int
+	Model                                execmodel.Model
 }
 
 func ParseFSMEnvSeed(fsOpts *FSMOptions, logger *slog.Logger) (*FSMEnvSeed, error) {
-	var compositeDeliverableTable *pfd.CompositeDeliverableTable
-	if fsOpts.CompositeDeliverableTableReader != nil {
-		var err error
-		compositeDeliverableTable, err = pfdtsv.ParseCompositeDeliverableTable(fsOpts.CompositeDeliverableTableReader)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
-		}
+	compositeDeliverableTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(fsOpts.CompositeDeliverableTableReader)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}
 	parseOpts := &pfdfmt.ParseOptions{
 		CompositeDeliverableTable: compositeDeliverableTable,
@@ -52,9 +50,12 @@ func ParseFSMEnvSeed(fsOpts *FSMOptions, logger *slog.Logger) (*FSMEnvSeed, erro
 	if err != nil {
 		return nil, fmt.Errorf("cmd.ParseFSMTable: %w", err)
 	}
-	resourceTable, err := fsmtsv.ParseResourceTable(fsOpts.ResourceTableReader)
-	if err != nil {
-		return nil, fmt.Errorf("cmd.ParseFSMTable: %w", err)
+	var resourceTable *fsmtable.ResourceTable
+	if fsOpts.ResourceTableReader != nil {
+		resourceTable, err = fsmtsv.ParseResourceTable(fsOpts.ResourceTableReader)
+		if err != nil {
+			return nil, fmt.Errorf("cmd.ParseFSMTable: %w", err)
+		}
 	}
 	var milestoneTable *fsmtable.MilestoneTable
 	if fsOpts.MilestoneTableReader != nil {
@@ -79,21 +80,21 @@ func ParseFSMEnvSeed(fsOpts *FSMOptions, logger *slog.Logger) (*FSMEnvSeed, erro
 		MilestoneTable:                       milestoneTable,
 		GroupTable:                           groupTable,
 		MaximalAvailableAllocationsThreshold: fsOpts.MaximalAvailableAllocationsThreshold,
+		Model:                                fsOpts.Model,
 	}, nil
 }
 
 func ValidateFSMEnvSeed(fsmEnvSeed *FSMEnvSeed, logger *slog.Logger, locale locale.Locale) error {
-	ps, err := allcheckers.Lint(
-		fsmEnvSeed.PFD,
-		fsmEnvSeed.AtomicProcessTable,
-		fsmEnvSeed.AtomicDeliverableTable,
-		nil,
-		fsmEnvSeed.CompositeDeliverableTable,
-		fsmEnvSeed.ResourceTable,
-		fsmEnvSeed.MilestoneTable,
-		fsmEnvSeed.GroupTable,
-		logger,
-	)
+	ps, err := allcheckers.Lint(allcheckers.Target{
+		PFD:                       fsmEnvSeed.PFD,
+		AtomicProcessTable:        fsmEnvSeed.AtomicProcessTable,
+		AtomicDeliverableTable:    fsmEnvSeed.AtomicDeliverableTable,
+		CompositeDeliverableTable: fsmEnvSeed.CompositeDeliverableTable,
+		ResourceTable:             fsmEnvSeed.ResourceTable,
+		MilestoneTable:            fsmEnvSeed.MilestoneTable,
+		GroupTable:                fsmEnvSeed.GroupTable,
+		Model:                     fsmEnvSeed.Model,
+	}, logger)
 	if err != nil {
 		return fmt.Errorf("cmd.MainCommandByOptions: %w", err)
 	}
@@ -122,27 +123,22 @@ func FSMPrepare(fsmEnvSeed *FSMEnvSeed, locale locale.Locale, logger *slog.Logge
 		return nil, fmt.Errorf("tools.FSMPrepare: new safe pfd: %w", err)
 	}
 
-	availableResources := fsmtable.AvailableResources(fsmEnvSeed.ResourceTable)
-
 	initialVolumeFunc, err := fsmtable.InitialVolumeByTableFunc(fsmEnvSeed.AtomicProcessTable, fsmtable.DefaultInitialVolumeColumnMatchFunc)
 	if err != nil {
 		return nil, fmt.Errorf("tools.FSMPrepare: initial volume func: %w", err)
 	}
 
-	reworkVolumeFunc, err := fsmtable.ReworkVolumeFuncByTableFunc(fsmEnvSeed.AtomicProcessTable, fsmtable.DefaultReworkVolumeRatioColumnMatchFunc, initialVolumeFunc)
+	resourceAspect, err := fsmtable.NewResourceAspect(fsmEnvSeed.Model.Resource, fsmEnvSeed.AtomicProcessTable, fsmEnvSeed.ResourceTable)
 	if err != nil {
-		return nil, fmt.Errorf("tools.FSMPrepare: rework volume func: %w", err)
+		return nil, fmt.Errorf("tools.FSMPrepare: resource aspect: %w", err)
 	}
 
-	maxRevisionMap, err := fsmtable.MaxRevisionMapByTableFunc(fsmEnvSeed.AtomicDeliverableTable, fsmtable.DefaultMaxRevisionColumnMatchFunc, p.FeedbackSourceDeliverables())
+	feedbackAspect, err := fsmtable.NewFeedbackAspect(fsmEnvSeed.Model.Feedback, p, fsmEnvSeed.AtomicProcessTable, fsmEnvSeed.AtomicDeliverableTable, initialVolumeFunc)
 	if err != nil {
-		return nil, fmt.Errorf("tools.FSMPrepare: max revision map: %w", err)
+		return nil, fmt.Errorf("tools.FSMPrepare: feedback aspect: %w", err)
 	}
 
-	neededResourceSetsFunc, err := fsmtable.NeededResourcesSetFuncByTable(fsmEnvSeed.AtomicProcessTable, fsmtable.DefaultNeededResourceSetsColumnSelectFunc)
-	if err != nil {
-		return nil, fmt.Errorf("tools.FSMPrepare: needed resource sets func: %w", err)
-	}
+	availableAllocationsFunc := fsm.NewThresholdAvailableAllocationsFunc(fsmEnvSeed.MaximalAvailableAllocationsThreshold, resourceAspect.NeededResourceSetsFunc, logger)
 
 	atomicDeliverableAvailableTimeFunc, err := fsmtable.AvailableTimeFuncByTable(fsmEnvSeed.AtomicDeliverableTable, fsmtable.DefaultAvailableTimeColumnMatchFunc, p.InitialDeliverables())
 	if err != nil {
@@ -154,17 +150,15 @@ func FSMPrepare(fsmEnvSeed *FSMEnvSeed, locale locale.Locale, logger *slog.Logge
 		return nil, fmt.Errorf("tools.FSMPrepare: precondition func: %w", err)
 	}
 
-	availableAllocationsFunc := fsm.NewThresholdAvailableAllocationsFunc(fsmEnvSeed.MaximalAvailableAllocationsThreshold, neededResourceSetsFunc, logger)
-
 	env := fsm.NewEnv(
 		p,
-		availableResources,
+		resourceAspect.AvailableResources,
 		availableAllocationsFunc,
 		initialVolumeFunc,
-		reworkVolumeFunc,
-		maxRevisionMap,
+		feedbackAspect.ReworkVolumeFunc,
+		feedbackAspect.FeedbackSourceMaxRevision,
 		preconditionFunc,
-		neededResourceSetsFunc,
+		resourceAspect.NeededResourceSetsFunc,
 		atomicDeliverableAvailableTimeFunc,
 		logger,
 	)

@@ -35,11 +35,7 @@ func TestPrecondition_Eval(t *testing.T) {
 	}{
 		"and condition (true)": {
 			Env: NewEnv(
-				// [D1] -> (P1) -> [D2]
-				//  \ \
-				//   \ +-> (P2) -> [D3]
-				//    \
-				//     +-> (P3) -> [D4]
+
 				branch,
 				sets.New(ResourceID.Compare, "R1"),
 				NewAvailableAllocationsFunc(neededResourceSetsFunc),
@@ -61,20 +57,20 @@ func TestPrecondition_Eval(t *testing.T) {
 			State: NewState(
 				0,
 				map[pfd.AtomicDeliverableID]int{
-					"D1": 1, // Initial deliverable
-					"D2": 1, // Not created yet
-					"D3": 1, // Not created yet
-					"D4": 0, // Not created yet
+					"D1": 1,
+					"D2": 1,
+					"D3": 1,
+					"D4": 0,
 				},
 				map[pfd.AtomicProcessID]Volume{
-					"P1": 0.5, // Any greater than or equal to MinimumVolume
-					"P2": 0.5, // Any greater than or equal to MinimumVolume
-					"P3": 1,   // Any less than or equal to initial volume
+					"P1": 0.5,
+					"P2": 0.5,
+					"P3": 1,
 				},
 				map[pfd.AtomicProcessID]int{
-					"P1": 1, // Any
-					"P2": 1, // Any
-					"P3": 0, // Any
+					"P1": 1,
+					"P2": 1,
+					"P3": 0,
 				},
 				Allocation{},
 				map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -126,11 +122,7 @@ func TestPrecondition_Eval(t *testing.T) {
 		},
 		"and condition (false)": {
 			Env: NewEnv(
-				// [D1] -> (P1) -> [D2]
-				//  \ \
-				//   \ +-> (P2) -> [D3]
-				//    \
-				//     +-> (P3) -> [D4]
+
 				branch,
 				sets.New(ResourceID.Compare, "R1"),
 				NewAvailableAllocationsFunc(neededResourceSetsFunc),
@@ -152,20 +144,20 @@ func TestPrecondition_Eval(t *testing.T) {
 			State: NewState(
 				0,
 				map[pfd.AtomicDeliverableID]int{
-					"D1": 1, // Initial deliverable
-					"D2": 0, // Any
-					"D3": 0, // Any
-					"D4": 0, // Any
+					"D1": 1,
+					"D2": 0,
+					"D3": 0,
+					"D4": 0,
 				},
 				map[pfd.AtomicProcessID]Volume{
-					"P1": 1, // Any greater than or equal to MinimumVolume
-					"P2": 1, // Any greater than or equal to MinimumVolume
-					"P3": 1, // Any less than or equal to initial volume
+					"P1": 1,
+					"P2": 1,
+					"P3": 1,
 				},
 				map[pfd.AtomicProcessID]int{
-					"P1": 0, // Any
-					"P2": 0, // Any
-					"P3": 0, // Any
+					"P1": 0,
+					"P2": 0,
+					"P3": 0,
 				},
 				Allocation{},
 				map[pfd.AtomicProcessID]*sets.Set[pfd.AtomicDeliverableID]{
@@ -292,10 +284,7 @@ func TestPrecondition_Compile(t *testing.T) {
 		Want  *Precondition
 	}{
 		"/regression_complete": {
-			//                                    - - - - - - - - - - - - - - - - - - - - -
-			//               - - -              /                    - - -                  \
-			//             V       \           V                   V       \                 \
-			// [D1] ---> (P1) ---> [D2] ---> (P2) ---> [D3] ---> (P3) ---> [D4] --> (P4) --> [D5]
+
 			PFD: pfd.NewSafePFD(
 				map[pfd.AtomicProcessID]string{
 					"P1": "P1",

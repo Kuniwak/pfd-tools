@@ -92,6 +92,10 @@ func (o *Options) Write(w io.Writer) error {
 
 func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 	flags := flag.NewFlagSet("pfdquery", flag.ContinueOnError)
+	flags.SetOutput(inout.Stderr)
+	flags.Usage = func() {
+		tools.PrintUsageHeader(flags, "Usage: pfdquery [options] -p <pfd> [-ap <atomic-process-table>] [-ad <atomic-deliverable-table>] [-r <resource-table>]", ShortHelp)
+	}
 
 	var commonRawOptions tools.CommonRawOptions
 	tools.DeclareCommonOptions(flags, &commonRawOptions)
@@ -121,6 +125,9 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
+	if commonOptions.ShortHelp {
+		return &Options{CommonOptions: commonOptions}, nil
+	}
 	if commonOptions.Version {
 		return &Options{CommonOptions: commonOptions}, nil
 	}
@@ -164,16 +171,13 @@ func ParseOptions(args []string, inout *cli.ProcInout) (*Options, error) {
 		}
 	}
 
-	var compositeDeliverableTable *pfd.CompositeDeliverableTable
-	if fsmOptions.CompositeDeliverableTableReader != nil {
-		compositeDeliverableTable, err = pfdtsv.ParseCompositeDeliverableTable(fsmOptions.CompositeDeliverableTableReader)
-		if err != nil {
-			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
-		}
+	compositeDeliverableTable, err := pfdtsv.ParseCompositeDeliverableTableOrEmpty(fsmOptions.CompositeDeliverableTableReader)
+	if err != nil {
+		return nil, fmt.Errorf("cmd.ParseOptions: %w", err)
 	}
 
 	var p *pfd.PFD
-	if fsmOptions.PFDReader != nil && compositeDeliverableTable != nil {
+	if fsmOptions.PFDReader != nil {
 		p, err = pfdfmt.Parse("", fsmOptions.PFDReader, &pfdfmt.ParseOptions{CompositeDeliverableTable: compositeDeliverableTable}, commonOptions.Logger)
 		if err != nil {
 			return nil, fmt.Errorf("cmd.ParseOptions: %w", err)

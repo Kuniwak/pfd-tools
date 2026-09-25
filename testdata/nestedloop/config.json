@@ -3,5 +3,7 @@
         "atomic_process_table": "atomic_proc.tsv",
         "atomic_deliverable_table": "deliv.tsv",
         "composite_deliverable_table": "comp_deliv.tsv",
-        "resource_table": "resource.tsv"
+        "resource_table": "resource.tsv",
+        "resource_mode": "finite",
+        "feedback_mode": "enabled"
 }

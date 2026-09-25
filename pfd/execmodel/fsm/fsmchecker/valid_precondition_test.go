@@ -8,6 +8,7 @@ import (
 	"github.com/Kuniwak/pfd-tools/chans"
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
+	"github.com/Kuniwak/pfd-tools/pfd/execmodel"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmchecker/fsmcommon"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmtable"
 	"github.com/Kuniwak/pfd-tools/slogtest"
@@ -257,7 +258,7 @@ func TestValidPrecondition(t *testing.T) {
 			ch := make(chan checkers.Problem)
 			go func() {
 				defer close(ch)
-				tgt := fsmcommon.NewTarget(p, testCase.AtomicProcessTable, testCase.AtomicDeliverableTable, nil, nil, nil, m, slog.New(slogtest.NewTestHandler(t)))
+				tgt := &fsmcommon.Target{PFD: p, AtomicProcessTable: testCase.AtomicProcessTable, AtomicDeliverableTable: testCase.AtomicDeliverableTable, Model: execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled}, Memoized: m, Logger: slog.New(slogtest.NewTestHandler(t))}
 				if err := ValidPrecondition.Check(tgt, ch); err != nil {
 					t.Errorf("ValidPrecondition.Check: %v", err)
 				}

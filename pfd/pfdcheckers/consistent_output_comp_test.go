@@ -112,6 +112,104 @@ func TestConsistentOutputComp(t *testing.T) {
 			},
 			Expected: []checkers.Problem{},
 		},
+
+		"ok-composite-deliverable": {
+			PFD: &pfd.PFD{
+				Nodes: sets.New(
+					(*pfd.Node).Compare,
+					&pfd.Node{ID: "D4", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "P1", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "P3", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D2", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D3", Type: pfd.NodeTypeCompositeDeliverable},
+					&pfd.Node{ID: "P4", Type: pfd.NodeTypeCompositeProcess},
+				),
+				Edges: sets.New(
+					(*pfd.Edge).Compare,
+					&pfd.Edge{Source: "D4", Target: "P1"},
+					&pfd.Edge{Source: "P1", Target: "D1"},
+					&pfd.Edge{Source: "D4", Target: "P3"},
+					&pfd.Edge{Source: "P3", Target: "D2"},
+					&pfd.Edge{Source: "D4", Target: "P4"},
+					&pfd.Edge{Source: "P4", Target: "D3"},
+					&pfd.Edge{Source: "P4", Target: "D1"},
+					&pfd.Edge{Source: "P4", Target: "D2"},
+				),
+				ProcessComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{
+					"P4": sets.New(pfd.NodeID.Compare, "P1", "P3"),
+				},
+				DeliverableComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{
+					"D3": sets.New(pfd.NodeID.Compare, "D1", "D2"),
+				},
+			},
+			Expected: []checkers.Problem{},
+		},
+
+		"ng-composite-deliverable": {
+			PFD: &pfd.PFD{
+				Nodes: sets.New(
+					(*pfd.Node).Compare,
+					&pfd.Node{ID: "D4", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "P1", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D2", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D3", Type: pfd.NodeTypeCompositeDeliverable},
+					&pfd.Node{ID: "P4", Type: pfd.NodeTypeCompositeProcess},
+				),
+				Edges: sets.New(
+					(*pfd.Edge).Compare,
+					&pfd.Edge{Source: "D4", Target: "P1"},
+					&pfd.Edge{Source: "P1", Target: "D1"},
+					&pfd.Edge{Source: "D4", Target: "P4"},
+					&pfd.Edge{Source: "P4", Target: "D3"},
+					&pfd.Edge{Source: "P4", Target: "D1"},
+					&pfd.Edge{Source: "P4", Target: "D2"},
+				),
+				ProcessComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{
+					"P4": sets.New(pfd.NodeID.Compare, "P1"),
+				},
+				DeliverableComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{
+					"D3": sets.New(pfd.NodeID.Compare, "D1", "D2"),
+				},
+			},
+			Expected: []checkers.Problem{checkers.NewProblem("consistent-output-comp", checkers.SeverityError, pfdcommon.NewLocation(pfdcommon.LocationTypePFD, "D2", "P4"))},
+		},
+
+		"ok-psubset": {
+			PFD: &pfd.PFD{
+				Nodes: sets.New(
+					(*pfd.Node).Compare,
+					&pfd.Node{ID: "D1", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D2", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D3", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "D4", Type: pfd.NodeTypeAtomicDeliverable},
+					&pfd.Node{ID: "P1", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "P2", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "P3", Type: pfd.NodeTypeAtomicProcess},
+					&pfd.Node{ID: "P4", Type: pfd.NodeTypeCompositeProcess},
+					&pfd.Node{ID: "P5", Type: pfd.NodeTypeCompositeProcess},
+				),
+				Edges: sets.New(
+					(*pfd.Edge).Compare,
+					&pfd.Edge{Source: "D1", Target: "P1"},
+					&pfd.Edge{Source: "P1", Target: "D2"},
+					&pfd.Edge{Source: "D2", Target: "P2"},
+					&pfd.Edge{Source: "P2", Target: "D3"},
+					&pfd.Edge{Source: "D3", Target: "P3"},
+					&pfd.Edge{Source: "P3", Target: "D4"},
+					&pfd.Edge{Source: "D1", Target: "P4"},
+					&pfd.Edge{Source: "P4", Target: "D4"},
+					&pfd.Edge{Source: "D1", Target: "P5"},
+					&pfd.Edge{Source: "P5", Target: "D3"},
+				),
+				ProcessComposition: map[pfd.NodeID]*sets.Set[pfd.NodeID]{
+					"P4": sets.New(pfd.NodeID.Compare, "P1", "P2", "P3"),
+					"P5": sets.New(pfd.NodeID.Compare, "P1", "P2"),
+				},
+			},
+			Expected: []checkers.Problem{},
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {

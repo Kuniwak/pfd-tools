@@ -5,22 +5,19 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Kuniwak/pfd-tools/graph"
-	"github.com/Kuniwak/pfd-tools/pairs"
+	"github.com/Kuniwak/pfd-tools/mastertsv"
 	"github.com/Kuniwak/pfd-tools/pfd"
 	"github.com/Kuniwak/pfd-tools/pfd/execmodel/fsm/fsmmasterschedule"
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// NewMilestoneTableByAtomicProcessTable derives a MilestoneTable from the milestone and group
-// columns of an AtomicProcessTable. Returns an empty table when the milestone column is absent.
 func NewMilestoneTableByAtomicProcessTable(ap *pfd.AtomicProcessTable) *MilestoneTable {
 	empty := &MilestoneTable{ExtraHeaders: []string{}, Rows: []*MilestoneTableRow{}}
-	milestoneIdx := DefaultMilestoneColumnMatchFunc(ap.ExtraHeaders)
+	milestoneIdx := DefaultBarColumnMatchFunc(ap.ExtraHeaders)
 	if milestoneIdx < 0 {
 		return empty
 	}
-	groupIdx := DefaultGroupColumnMatchFunc(ap.ExtraHeaders)
+	groupIdx := DefaultRowColumnMatchFunc(ap.ExtraHeaders)
 	type milestoneInfo struct {
 		groups *sets.Set[string]
 	}
@@ -66,23 +63,14 @@ func NewMilestoneTableByAtomicProcessTable(ap *pfd.AtomicProcessTable) *Mileston
 	return &MilestoneTable{ExtraHeaders: []string{}, Rows: rows}
 }
 
-const (
-	MilestoneColumnHeaderJa = "マイルストーン"
-	MilestoneColumnHeaderEn = "Milestone"
-	GroupColumnHeaderJa     = "グループ"
-	GroupColumnHeaderEn     = "Group"
-)
-
-var DefaultMilestoneColumnMatchFunc = pfd.ColumnMatchFunc(sets.New(
+var DefaultBarColumnMatchFunc = pfd.ColumnMatchFunc(sets.New(
 	strings.Compare,
-	MilestoneColumnHeaderJa,
-	MilestoneColumnHeaderEn,
+	mastertsv.BarColumnHeader,
 ))
 
-var DefaultGroupColumnMatchFunc = pfd.ColumnMatchFunc(sets.New(
+var DefaultRowColumnMatchFunc = pfd.ColumnMatchFunc(sets.New(
 	strings.Compare,
-	GroupColumnHeaderJa,
-	GroupColumnHeaderEn,
+	mastertsv.RowColumnHeader,
 ))
 
 func RawGroupsMap(t *pfd.AtomicProcessTable, groupColumnSelectFunc pfd.ColumnSelectFunc) (map[pfd.AtomicProcessID]string, error) {
@@ -113,8 +101,14 @@ func ValidateGroupsMap(m map[pfd.AtomicProcessID]string) (map[pfd.AtomicProcessI
 
 func RawMilestoneMap(t *pfd.AtomicProcessTable, milestoneColumnSelectFunc pfd.ColumnSelectFunc) (map[pfd.AtomicProcessID]string, error) {
 	m := make(map[pfd.AtomicProcessID]string, len(t.Rows))
+
+	milestoneIdx := milestoneColumnSelectFunc(t.ExtraHeaders)
+	if milestoneIdx < 0 {
+		return nil, fmt.Errorf("fsmtable.RawMilestoneMap: missing milestone column")
+	}
+
 	for _, row := range t.Rows {
-		m[row.ID] = row.ExtraCells[milestoneColumnSelectFunc(t.ExtraHeaders)]
+		m[row.ID] = row.ExtraCells[milestoneIdx]
 	}
 	return m, nil
 }
@@ -190,44 +184,6 @@ func (p *MilestoneTableRow) Compare(b *MilestoneTableRow) int {
 
 func (p *MilestoneTableRow) Row() []string {
 	return append([]string{string(p.MilestoneID), p.Description, p.GroupIDs, p.Successors}, p.ExtraCells...)
-}
-
-func MilestoneGraphByTable(t *MilestoneTable, groups *sets.Set[fsmmasterschedule.Group]) (map[fsmmasterschedule.Group]*graph.Graph, error) {
-	m := make(map[fsmmasterschedule.Group]*graph.Graph, groups.Len())
-	for _, group := range groups.Iter() {
-		nodes := sets.New(graph.Node.Compare)
-		for _, row := range t.Rows {
-			groupIDs, err := ParseGroups(row.GroupIDs)
-			if err != nil {
-				return nil, fmt.Errorf("fsmtable.MilestoneGraphByTable: %w", err)
-			}
-			if !groupIDs.Contains(fsmmasterschedule.Group.Compare, group) {
-				continue
-			}
-			nodes.Add(graph.Node.Compare, graph.Node(row.MilestoneID))
-		}
-
-		edges := sets.New(pairs.Compare(graph.Node.Compare, graph.Node.Compare))
-		for _, row := range t.Rows {
-			groupIDs, err := ParseGroups(row.GroupIDs)
-			if err != nil {
-				return nil, fmt.Errorf("fsmtable.MilestoneGraphByTable: %w", err)
-			}
-			if !groupIDs.Contains(fsmmasterschedule.Group.Compare, group) {
-				continue
-			}
-			successors, err := ParseSuccessors(row.Successors)
-			if err != nil {
-				return nil, fmt.Errorf("fsmtable.MilestoneGraphByTable: %w", err)
-			}
-			for _, successor := range successors.Iter() {
-				edges.Add(pairs.Compare(graph.Node.Compare, graph.Node.Compare), pairs.New(graph.Node(row.MilestoneID), graph.Node(successor)))
-			}
-		}
-
-		m[group] = &graph.Graph{Nodes: nodes, Edges: edges}
-	}
-	return m, nil
 }
 
 func ParseGroup(s string) (fsmmasterschedule.Group, error) {

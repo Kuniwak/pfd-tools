@@ -9,7 +9,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/sets"
 )
 
-// SearchBestPlansWithPrefix returns an optimal-solution search with a plan prefix.
+const searchProgressLogInterval = 10_000
+
 func SearchBestPlansWithPrefix() SearchWithPrefixFunc {
 	return func(e *Env, prefix *Plan) (*sets.Set[*Plan], error) {
 		var start State
@@ -54,7 +55,6 @@ func searchBestPlans(e *Env) (*sets.Set[*Plan], error) {
 	return searchBestPlansFromState(e, start)
 }
 
-// searchBestPlansFromState returns execution plans with the shortest completion time from the specified start state.
 func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 
 	type parentInfo struct {
@@ -63,11 +63,10 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 		child  State
 	}
 
-	// dist[k] = the shortest time to reach that "state content (excluding time)"
 	dist := make(map[uint64]execmodel.Time, 1024)
-	// parents[k] = parent transitions that can reach k in the shortest time dist[k] (multiple)
+
 	parents := make(map[uint64][]parentInfo, 1024)
-	// keep representative State for storage (used for restoration and transition generation)
+
 	stateRep := make(map[uint64]State, 1024)
 
 	h := &maphash.Hash{}
@@ -79,35 +78,40 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 	dist[startKey] = start.Time
 	stateRep[startKey] = start
 
-	// Priority queue: Time ascending, for same time prioritize "nodes that came from transitions with larger total consumption"
 	pq := &planPQ{}
 	heap.Init(pq)
 	heap.Push(pq, &pqItem{
 		key:        startKey,
 		state:      start,
 		priorityT:  start.Time,
-		negTotCons: 0, // 0 because it's the start
+		negTotCons: 0,
 		seq:        0,
 	})
 
-	bestTime := execmodel.Time(-1) // undetermined
+	bestTime := execmodel.Time(-1)
 	goalKeys := make([]uint64, 0, 8)
+
+	iter := 0
+	e.Logger.Debug("fsm.Env.SearchBestPlans: start", "time", float64(start.Time))
 
 	for pq.Len() > 0 {
 		it := heap.Pop(pq).(*pqItem)
 		k := it.key
 		s := it.state
 
-		// Discard stale entries
+		iter++
+		if iter%searchProgressLogInterval == 0 {
+			e.Logger.Debug("fsm.Env.SearchBestPlans: progress", "iter", iter, "pqLen", pq.Len(), "time", float64(s.Time), "bestTime", float64(bestTime))
+		}
+
 		if d, ok := dist[k]; !ok || d != s.Time {
 			continue
 		}
-		// If the best completion time is already determined and this is slower, cut off
+
 		if bestTime >= 0 && s.Time > bestTime {
 			break
 		}
 
-		// Completion check
 		isCompleted := e.IsCompleted(s)
 		if isCompleted {
 			if bestTime < 0 || s.Time < bestTime {
@@ -117,7 +121,7 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 			} else if s.Time == bestTime {
 				goalKeys = append(goalKeys, k)
 			}
-			// Do not expand from completed state (DAG property: time is monotonically increasing)
+
 			continue
 		}
 
@@ -127,10 +131,9 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 			continue
 		}
 
-		// Normal expansion
 		for _, tr := range ts.Iter() {
 			ns := tr.NextState
-			// If the best time is determined, expansion beyond it is unnecessary
+
 			if bestTime >= 0 && ns.Time > bestTime {
 				continue
 			}
@@ -158,7 +161,7 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 					seq:        pq.nextSeq(),
 				})
 			} else if newT == oldT {
-				// Also save tied parents (create shortest DAG)
+
 				parents[nk] = append(parents[nk], parentInfo{
 					parent: k,
 					alloc:  tr.Allocation,
@@ -168,19 +171,19 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 		}
 	}
 
-	// Empty if there is no shortest goal
+	e.Logger.Debug("fsm.Env.SearchBestPlans: done", "iter", iter, "goals", len(goalKeys), "bestTime", float64(bestTime))
+
 	if bestTime < 0 || len(goalKeys) == 0 {
 		return sets.NewWithCapacity[*Plan](0), nil
 	}
 
-	// Full restoration from goal to start (backtrack on DAG)
 	results := make([]*Plan, 0, len(goalKeys))
-	memoPaths := make(map[uint64][]*Plan, len(parents)) // Memoization (suppress expansion of duplicate nodes)
+	memoPaths := make(map[uint64][]*Plan, len(parents))
 
 	var buildAll func(k uint64) []*Plan
 	buildAll = func(k uint64) []*Plan {
 		if k == startKey {
-			// Empty plan (transitions will be added here)
+
 			return []*Plan{NewEmptyPlan(start)}
 		}
 		if v, ok := memoPaths[k]; ok {
@@ -188,7 +191,7 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 		}
 		ps := parents[k]
 		if len(ps) == 0 {
-			// No parent other than start = unreachable (normally doesn't happen)
+
 			return nil
 		}
 		acc := make([]*Plan, 0, 8)
@@ -217,9 +220,9 @@ func searchBestPlansFromState(e *Env, start State) (*sets.Set[*Plan], error) {
 type pqItem struct {
 	key        uint64
 	state      State
-	priorityT  execmodel.Time // ascending order
-	negTotCons int            // prioritize larger total consumption at the same time (stored as negative)
-	seq        int64          // for stabilization
+	priorityT  execmodel.Time
+	negTotCons int
+	seq        int64
 	index      int
 }
 type planPQ struct {

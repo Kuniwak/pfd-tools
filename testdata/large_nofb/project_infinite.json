@@ -1,0 +1,10 @@
+{
+  "pfd": "pfd.drawio",
+  "atomic_process_table": "ap_infinite.tsv",
+  "atomic_deliverable_table": "ad.tsv",
+  "composite_deliverable_table": "cd.tsv",
+  "milestone_table": "m.tsv",
+  "group_table": "g.tsv",
+  "resource_mode": "infinite",
+  "feedback_mode": "disabled"
+}

@@ -12,6 +12,8 @@ import (
 	"github.com/Kuniwak/pfd-tools/version"
 )
 
+const ShortHelp = "実行計画 JSON から指定フォーマットのタイムラインデータを生成します。"
+
 func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 	options, err := ParseOptions(args, inout)
 	if err != nil {
@@ -28,6 +30,11 @@ func MainCommandByArgs(args []string, inout *cli.ProcInout) int {
 
 func MainCommandByOptions(options *Options, inout *cli.ProcInout) error {
 	if options.CommonOptions.Help {
+		return nil
+	}
+
+	if options.CommonOptions.ShortHelp {
+		fmt.Fprintln(inout.Stdout, ShortHelp)
 		return nil
 	}
 

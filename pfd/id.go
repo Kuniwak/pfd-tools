@@ -2,6 +2,7 @@ package pfd
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -49,6 +50,12 @@ func ParseNodeID(id NodeID) (int, error) {
 		return i, nil
 	}
 	return 0, fmt.Errorf("pfd.ParseNodeID: invalid node ID: %q", id)
+}
+
+var WellFormedNodeIDPattern = regexp.MustCompile(`^[PD][0-9]+(\.[0-9]+)*$`)
+
+func IsWellFormedNodeID(id NodeID) bool {
+	return WellFormedNodeIDPattern.MatchString(string(id))
 }
 
 func ParseProcessID(id NodeID) (int, error) {
