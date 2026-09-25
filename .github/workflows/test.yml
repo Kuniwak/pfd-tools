@@ -65,7 +65,7 @@ jobs:
     if: needs.changes.outputs.go_any_changed == 'true'
     permissions:
       contents: read
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -78,7 +78,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: go test ./...
+        run: go test -race ./...
 
   md-test:
     runs-on: ubuntu-latest

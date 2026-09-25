@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/Kuniwak/pfd-tools/checkers"
 	"github.com/Kuniwak/pfd-tools/pfd"
@@ -33,21 +32,12 @@ type LintFunc func(t Target, ch chan<- checkers.Problem) error
 
 func NewLintFunc(logger *slog.Logger) LintFunc {
 	return func(t Target, ch chan<- checkers.Problem) error {
+
+		defer close(ch)
+
 		var eg errgroup.Group
 
-		runningWorkers := 2
-		var runningWorkersMu sync.Mutex
-
 		eg.Go(func() error {
-			defer func() {
-				runningWorkersMu.Lock()
-				runningWorkers -= 1
-				runningWorkersMu.Unlock()
-				if runningWorkers == 0 {
-					close(ch)
-				}
-			}()
-
 			m := pfdcommon.NewMemoized(t.PFD, logger)
 			if err := PFDCheckers.Check(pfdcommon.NewTarget(t.PFD, t.AtomicProcessTable, t.AtomicDeliverableTable, t.CompositeProcessTable, t.CompositeDeliverableTable, m), ch); err != nil {
 				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
@@ -56,15 +46,6 @@ func NewLintFunc(logger *slog.Logger) LintFunc {
 			return nil
 		})
 		eg.Go(func() error {
-			defer func() {
-				runningWorkersMu.Lock()
-				runningWorkers -= 1
-				runningWorkersMu.Unlock()
-				if runningWorkers == 0 {
-					close(ch)
-				}
-			}()
-
 			if err := t.Model.Validate(); err != nil {
 				return fmt.Errorf("allcheckers.NewLintFunc: %w", err)
 			}

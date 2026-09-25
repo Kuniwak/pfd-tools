@@ -71,3 +71,40 @@ func TestLintRejectsUnknownExecModel(t *testing.T) {
 		})
 	}
 }
+
+func TestLintFuncClosesChannelOnce(t *testing.T) {
+	testCases := map[string]struct {
+		model     execmodel.Model
+		expectErr bool
+	}{
+		"both checks run": {
+			model:     execmodel.Model{Resource: execmodel.ResourceModeFinite, Feedback: execmodel.FeedbackModeEnabled},
+			expectErr: false,
+		},
+
+		"model validation fails immediately": {
+			model:     execmodel.Model{},
+			expectErr: true,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			lint := NewLintFunc(slog.New(slogtest.NewTestHandler(t)))
+			for range 100 {
+				ch := make(chan checkers.Problem)
+				errCh := make(chan error, 1)
+
+				go func() {
+					errCh <- lint(Target{PFD: pfd.PresetSmallest, Model: tc.model}, ch)
+				}()
+				for range ch {
+				}
+				err := <-errCh
+
+				if (err != nil) != tc.expectErr {
+					t.Fatalf("lint() error = %v, expectErr %v", err, tc.expectErr)
+				}
+			}
+		})
+	}
+}
